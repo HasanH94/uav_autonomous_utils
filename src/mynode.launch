@@ -1,0 +1,72 @@
+<launch>
+  <!-- 1) ARGUMENTS -->
+  <!-- Adjust these defaults based on your system -->
+  <arg name="odom_topic"         default="/mavros/local_position/odom"/>
+  <arg name="cloud_topic"        default="/camera/depth/points"/>
+  <arg name="camera_pose_topic"  default="/camera/pose"/>
+  <arg name="depth_topic"        default="/camera/depth/image_raw"/>
+
+  <!-- If you want to define map size, max_vel, etc. -->
+  <arg name="map_size_x" default="40.0"/>
+  <arg name="map_size_y" default="40.0"/>
+  <arg name="map_size_z" default="5.0"/>
+  <arg name="max_vel"    default="2.0"/>
+  <arg name="max_acc"    default="2.5"/>
+
+
+  <!-- Decide how you set the final goal:
+       flight_type=1 => 2D Nav Goal
+       flight_type=2 => Waypoints
+  -->
+  <arg name="flight_type" default="1"/>
+
+  <!-- 2) Include your kino_algorithm.xml (the core planner) -->
+  <include file="/home/hasan/research_ws/src/othmanPack/src/kino_algorithm.xml">
+    <!-- Pass in relevant arguments -->
+    <arg name="map_size_x_" value="$(arg map_size_x)"/>
+    <arg name="map_size_y_" value="$(arg map_size_y)"/>
+    <arg name="map_size_z_" value="$(arg map_size_z)"/>
+    
+    <arg name="odometry_topic" value="$(arg odom_topic)"/>
+    <arg name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
+    <arg name="depth_topic" value="$(arg depth_topic)"/>
+    <arg name="cloud_topic" value="$(arg cloud_topic)"/>
+
+    <arg name="max_vel" value="$(arg max_vel)"/>
+    <arg name="max_acc" value="$(arg max_acc)"/>
+    <arg name="cx" value="320.5"/>
+    <arg name="cy" value="240.5"/>
+    <arg name="fx" value="343.49636753580074"/>
+    <arg name="fy" value="343.49636753580074"/>
+
+    <!-- flight_type + waypoints if you want them -->
+    <arg name="flight_type" value="$(arg flight_type)"/>
+    <arg name="point_num" value="1"/>  <!-- If you want just 1 waypoint or more -->
+
+    <!-- For flight_type=2, specify multiple waypoints: -->
+    <arg name="point0_x" value="5.0"/>
+    <arg name="point0_y" value="0.0"/>
+    <arg name="point0_z" value="3.0"/>
+  </include>
+
+  <!-- 3) Launch 'traj_server' to handle trajectory storage/publishing -->
+  <node pkg="plan_manage" name="traj_server" type="traj_server" output="screen">
+    <remap from="/position_cmd" to="/mavros/setpoint_position/local"/>
+    <remap from="/odom_world" to="$(arg odom_topic)"/>
+    <param name="traj_server/time_forward" value="1.5" type="double"/>
+  </node>
+
+  <!-- 4) Launch 'waypoint_generator' if flight_type=1 or 2 is used -->
+  <node pkg="waypoint_generator" name="waypoint_generator" type="waypoint_generator" output="screen">
+    <remap from="~odom" to="$(arg odom_topic)"/>
+    <remap from="~goal" to="/move_base_simple/goal"/>
+    <!-- This triggers the start of the trajectory once the goal is set -->
+    <remap from="~traj_start_trigger" to="/traj_start_trigger" />
+    <param name="waypoint_type" value="manual-lonely-waypoint"/>
+  </node>
+
+  <!-- OPTIONAL: If you want to stop everything when the drone arrives,
+       you might add a small node or script that monitors /fast_planner_node or /traj_server
+       for "goal reached" and then shuts down.
+  -->
+</launch>

@@ -1,0 +1,1 @@
+/home/hasan/research_ws/src/othmanPack/devel/.private/catkin_tools_prebuild/setup.bash

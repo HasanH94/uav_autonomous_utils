@@ -1,0 +1,14 @@
+<launch>
+  <!-- OctoMap Server Node -->
+
+  <node pkg="octomap_server" type="octomap_server_node" name="octomap_server" output="screen">
+    <!-- Parameters -->
+  <param name="resolution" value="0.1" />  <!-- Voxel size in meters -->
+  <param name="frame_id" value="map" />     <!-- Global frame -->
+  <param name="latch" value="false" />
+  <param name="max_range" value="5.0" />    <!-- Max sensing range (meters) -->
+
+  <!-- Input Topic (PointCloud2 from depth camera) -->
+  <remap from="cloud_in" to="/iris/camera/depth/points" />
+</node>
+</launch>

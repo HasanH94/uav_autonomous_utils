@@ -1,0 +1,12 @@
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/./setup.sh
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/./setup.zsh
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/./local_setup.zsh
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/./env.sh
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/./setup.bash
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/./local_setup.sh
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/./cmake.lock
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/./local_setup.bash
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/./_setup_util.py
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/share/catkin_tools_prebuild/cmake/catkin_tools_prebuildConfig-version.cmake
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/share/catkin_tools_prebuild/cmake/catkin_tools_prebuildConfig.cmake
+Symlinking /home/hasan/research_ws/src/othmanPack/devel/lib/pkgconfig/catkin_tools_prebuild.pc

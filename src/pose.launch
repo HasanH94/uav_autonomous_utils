@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="othmanPack" type="estimation_of_pose.py" name="pose_estimation" output="screen" respawn="true" respawn_delay="5">
+        <!-- Add any necessary parameters or remappings here -->
+    </node>
+</launch>
