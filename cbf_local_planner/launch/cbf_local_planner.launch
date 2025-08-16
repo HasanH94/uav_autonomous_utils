@@ -1,0 +1,35 @@
+<launch>
+  <!-- A+B: supports (cloud preproc + vegetation κ) -->
+  <node pkg="uav_autonomous_utils" type="cbf_supports_node.py" name="cbf_supports_node" output="screen">
+    <param name="odom_frame" value="odom"/>
+    <param name="support_k" value="1"/>
+    <param name="region_radius" value="1.0"/>
+    <param name="min_neighbors" value="12"/>
+    <param name="crop_radius" value="7.0"/>
+    <param name="stride" value="4"/>
+    <param name="buffer_len" value="8"/>
+  </node>
+
+  <!-- C: controller (CBF-QP + FoV) -->
+  <node pkg="uav_autonomous_utils" type="cbf_qp_controller_node.py" name="cbf_qp_controller_node" output="screen">
+    <param name="odom_frame" value="odom"/>
+    <param name="camera_frame" value="iris/camera_link"/>
+    <param name="max_speed" value="2.5"/>
+    <param name="max_yaw_rate" value="2.0"/>
+    <param name="a_max" value="3.0"/>
+    <param name="enable_fov" value="true"/>
+    <param name="fov_half_angle_deg" value="42.0"/>
+    <param name="yaw_switch_distance" value="1.5"/>
+    <param name="dt_hold_default" value="0.02"/>
+    <param name="publish_cmd_vel" value="false"/>  <!-- disable velocity stream when trajectory streaming is enabled -->
+  </node>
+
+  <!-- D: path/trajectory streamer (toggle preview on/off) -->
+  <node pkg="uav_autonomous_utils" type="cbf_path_streamer_node.py" name="cbf_path_streamer_node" output="screen">
+    <param name="odom_frame" value="odom"/>
+    <param name="enable_preview" value="true"/>
+    <param name="preview_horizon_s" value="1.2"/>
+    <param name="preview_points" value="4"/>
+    <param name="pub_rate_hz" value="15.0"/>
+  </node>
+</launch>

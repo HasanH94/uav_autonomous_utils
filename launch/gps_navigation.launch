@@ -5,7 +5,7 @@
         <remap from="/uav/attractive_velocity" to="/uav/attractive_velocity"/>
     </node>
 
-    <node pkg="artificial_potential_fields" type="apf" name="apf_node" output="screen">
+    <!-- <node pkg="artificial_potential_fields" type="apf" name="apf_node" output="screen">
         <remap from="/point_cloud" to="/iris/camera/depth/points"/>
         <remap from="/potential_fields/velocity" to="/mavros/setpoint_velocity/cmd_vel"/>
         <remap from="/uav/odometry" to="/mavros/local_position/odom"/>
@@ -13,7 +13,7 @@
         <param name="k_repulsive" value="0.0025" />
         <param name="k_repulsive_z" value="0.001" />
         <param name="eta_0" value="6.0" />
-    </node>
+    </node> -->
 
 
 </launch>

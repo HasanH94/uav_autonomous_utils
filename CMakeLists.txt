@@ -7,18 +7,37 @@ endif()
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  rospy
   std_msgs
   sensor_msgs
   cv_bridge
   geometry_msgs
+  nav_msgs
+  trajectory_msgs
+  message_generation
   # Add other ROS 1 dependencies here
 )
 
 find_package(PCL REQUIRED)
+
+# Generate messages
+add_message_files(FILES
+  SupportPoint.msg
+  SupportArray.msg
+)
+
+generate_messages(DEPENDENCIES
+  std_msgs
+  geometry_msgs
+)
+
+catkin_package(
+  CATKIN_DEPENDS message_runtime std_msgs geometry_msgs
+)
 include_directories(
   include
-	${catkin_INCLUDE_DIRS}
-	${PCL_INCLUDE_DIRS}
+  ${catkin_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
 
 message(STATUS "PCL include directories: ${PCL_INCLUDE_DIRS} !!!!!!!!!!!!!!!!!!!!!!!!")

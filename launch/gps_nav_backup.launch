@@ -153,4 +153,23 @@
 
 
 
+
+    <node pkg="depth_cbf_planner" type="cbf_local_planner.py" name="depth_cbf_local_planner" output="screen">
+        <param name="odom_frame" value="odom"/>
+        <param name="camera_frame" value="camera_depth_optical_frame"/>
+        <param name="max_speed" value="2.5"/>
+        <param name="max_yaw_rate" value="2.0"/>
+        <param name="a_max" value="3.0"/>
+        <param name="yaw_switch_distance" value="1.5"/>
+        <param name="enable_fov" value="true"/>
+        <param name="fov_half_angle_deg" value="42.0"/>
+        <param name="support_k" value="1"/>
+        <param name="region_radius" value="0.20"/>
+        <param name="min_neighbors" value="12"/>
+        <param name="dt_hold_default" value="0.02"/>
+        <param name="path_rate_hz" value="10.0"/>
+    </node>
+
+
+
 </launch>
