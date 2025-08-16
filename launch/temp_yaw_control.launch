@@ -1,0 +1,17 @@
+<launch>
+    <node pkg="uav_autonomous_utils" type="trajectory_follower_with_hybrid_yaw_control.py" name="trajectory_follower_with_yaw_control" output="screen">
+        <!-- PID gains for Yaw -->
+        <param name="kp_yaw" value="0.8" />
+        <param name="ki_yaw" value="0.1" />
+        <param name="kd_yaw" value="0.2" />
+        <!-- Controller parameters -->
+        <param name="max_yaw_rate" value="2.0" />
+        <param name="yaw_switch_distance" value="1.5" />
+        <param name="align_with_velocity_distance" value="10.0" />
+        <param name="position_tolerance" value="0.3" />
+        <param name="yaw_tolerance" value="0.1" />
+        <param name="is_gps_navigation_mode" value="true" />
+        <remap from="/uav/odometry" to="/mavros/local_position/odom"/>
+        <remap from="/goal_point" to="/move_base_mission"/>
+    </node>
+</launch>

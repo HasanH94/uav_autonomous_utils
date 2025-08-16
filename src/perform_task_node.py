@@ -1,71 +1,85 @@
 #!/usr/bin/env python3
+
 import rospy
 from std_msgs.msg import Bool
+from mavros_msgs.srv import SetMode, SetModeRequest
+from mavros_msgs.msg import State
 import time
 
-def perform_task():
-    # Initialize the ROS node
-    rospy.init_node('perform_task_node', anonymous=True)
-    
-    # Create a publisher to notify the State Manager when the task is done
-    task_done_pub = rospy.Publisher('/task_done', Bool, queue_size=10)
-    
-    rospy.loginfo("Perform Task Node Started. Performing task...")
-    
-    # Define the task duration (in seconds)
-    task_duration = 10  # 10 seconds
-    
-    # Determine if ROS is using simulated time
-    use_sim_time = rospy.get_param('/use_sim_time', False)
-    
-    if use_sim_time:
-        rospy.loginfo("Simulated time is enabled. Using rospy.get_time().")
-        
-        # Wait until ROS time is non-zero (i.e., /clock is being published)
-        while rospy.get_time() == 0.0 and not rospy.is_shutdown():
-            rospy.loginfo("Waiting for ROS time to be initialized...")
-            rospy.sleep(0.1)
-        
-        start_time = rospy.get_time()
-    else:
-        rospy.loginfo("Simulated time is disabled. Using system time.")
-        start_time = time.time()
-    
-    # Define the rate at which to publish False messages
-    rate = rospy.Rate(10)  # 10 Hz
-    
-    # Continuously publish False until the task is completed
-    while not rospy.is_shutdown():
-        if use_sim_time:
-            current_time = rospy.get_time()
-        else:
-            current_time = time.time()
-        
-        elapsed_time = current_time - start_time
-        
-        if elapsed_time < task_duration:
-            # Publish False to indicate task is ongoing
-            task_done_msg = Bool(data=False)
-            task_done_pub.publish(task_done_msg)
-            rospy.logdebug(f"Task ongoing: {elapsed_time:.2f}/{task_duration} seconds elapsed.")
-        else:
-            # Publish True to indicate task completion
-            task_done_msg = Bool(data=True)
-            task_done_pub.publish(task_done_msg)
-            rospy.loginfo("Perform Task Completed. Notifying State Manager.")
-            
-            # Allow some time for the message to be sent
-            rospy.sleep(1)
-            
-            # Shutdown the node
-            rospy.signal_shutdown("Task Completed")
-            break
-        
-        # Sleep to maintain the loop rate
-        rate.sleep()
+class PerformTaskNode:
+    def __init__(self):
+        rospy.init_node("perform_task_node", anonymous=True)
 
-if __name__ == '__main__':
+        # Publisher for the task done signal
+        self.task_done_pub = rospy.Publisher('/drone_events/task_done', Bool, queue_size=10)
+
+        # State subscriber to check current mode
+        self.current_state = State()
+        self.state_sub = rospy.Subscriber("mavros/state", State, self.state_cb)
+
+        # Set mode service client
+        rospy.wait_for_service("/mavros/set_mode")
+        self.set_mode_client = rospy.ServiceProxy("mavros/set_mode", SetMode)
+
+        rospy.loginfo("PerformTaskNode initialized.")
+
+    def state_cb(self, msg):
+        """Keep track of the current FCU state."""
+        self.current_state = msg
+
+    def set_loiter_mode(self):
+        """Switch the drone to AUTO.LOITER mode."""
+        loiter_set_mode = SetModeRequest()
+        loiter_set_mode.custom_mode = 'AUTO.LOITER'
+        last_req = rospy.Time.now()
+
+        rospy.loginfo("Attempting to set AUTO.LOITER mode...")
+        while not rospy.is_shutdown() and self.current_state.mode != "AUTO.LOITER":
+            if (rospy.Time.now() - last_req) > rospy.Duration(2.0):
+                try:
+                    resp = self.set_mode_client(loiter_set_mode)
+                    if resp.mode_sent:
+                        rospy.loginfo("AUTO.LOITER mode change request sent.")
+                    else:
+                        rospy.logwarn("Failed to send AUTO.LOITER mode change request.")
+                except rospy.ServiceException as e:
+                    rospy.logerr(f"Service call to set_mode failed: {e}")
+                last_req = rospy.Time.now()
+            
+            rospy.sleep(0.1)
+
+        if self.current_state.mode == "AUTO.LOITER":
+            rospy.loginfo("Drone is in AUTO.LOITER mode.")
+            return True
+        else:
+            rospy.logwarn("Failed to switch to AUTO.LOITER mode.")
+            return False
+
+    def run(self):
+        """Orchestration: set LOITER, wait, and publish task_done."""
+        # Wait for FCU connection
+        while not rospy.is_shutdown() and not self.current_state.connected:
+            rospy.loginfo("Waiting for FCU connection...")
+            rospy.sleep(1)
+        rospy.loginfo("FCU connected.")
+
+        if self.set_loiter_mode():
+            rospy.loginfo("Mode set to AUTO.LOITER. Waiting for 5 seconds...")
+            time.sleep(5.0)
+
+            rospy.loginfo("Wait complete. Publishing task_done signal.")
+            self.task_done_pub.publish(Bool(data=True))
+            rospy.sleep(1.0)  # Give time for the message to be published
+        else:
+            rospy.logerr("Failed to set AUTO.LOITER mode. Aborting.")
+
+        rospy.loginfo("Task finished. Node will remain active until shut down by the state manager.")
+        rospy.spin() # Keep the node alive until it's shut down externally
+
+
+if __name__ == "__main__":
     try:
-        perform_task()
+        node = PerformTaskNode()
+        node.run()
     except rospy.ROSInterruptException:
         pass

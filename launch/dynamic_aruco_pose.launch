@@ -1,0 +1,36 @@
+<launch>
+
+    
+    <arg name="zOffset"         default="1.2"/>    <!-- Offset along marker's local Z-axis in meters -->
+    <arg name="targetFrame"     default="odom"/>   <!-- Frame to publish the final pose in -->
+    <arg name="enableViz"       default="false"/>   <!-- Enable/disable visualization window -->
+    <arg name="min_marker_pixel_area" default="400"/>
+    <arg name="max_marker_pixel_area" default="100000"/>
+    <arg name="outputGoalTopic" default="/move_base_visual"/> <!-- Output topic for the selected goal -->
+    <arg name="publishRate"     default="10.0"/>   <!-- Rate at which to publish poses (Hz) -->
+
+    <!-- Camera Topic Parameters -->
+    <arg name="rgb_topic"       default="/iris/camera/rgb/image_raw"/>
+    <arg name="depth_topic"     default="/iris/camera/depth/image_raw"/>
+    <arg name="info_topic"      default="/iris/camera/rgb/camera_info"/>
+
+    <node pkg="uav_autonomous_utils" type="dynamic_aruco_pose_publisher.py" name="dynamic_aruco_pose_publisher" output="screen">
+        <!-- Standard parameters -->
+        
+        <param name="z_offset"             value="$(arg zOffset)"/>
+        <param name="target_frame"         value="$(arg targetFrame)"/>
+        <param name="enable_visualization" value="$(arg enableViz)"/>
+        <param name="min_marker_pixel_area" value="$(arg min_marker_pixel_area)"/>
+        <param name="max_marker_pixel_area" value="$(arg max_marker_pixel_area)"/>
+        <param name="publish_rate"         value="$(arg publishRate)"/>
+        
+        <!-- Remap camera topics -->
+        <param name="camera_rgb_topic"     value="$(arg rgb_topic)"/>
+        <param name="camera_depth_topic"   value="$(arg depth_topic)"/>
+        <param name="camera_info_topic"    value="$(arg info_topic)"/>
+        
+        <!-- Output topic for the offset pose -->
+        <param name="output_goal_topic"    value="$(arg outputGoalTopic)"/>
+    </node>
+
+</launch>

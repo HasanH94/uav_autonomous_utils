@@ -1,0 +1,27 @@
+<robot name="iris_drone">
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <mesh filename="package://mavlink_sitl_gazebo/models/iris/meshes/iris.stl" scale="1.5 1.5 1.5"/>
+      </geometry>
+      <material name="light_grey">
+        <color rgba="0.7 0.7 0.7 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <link name="iris/camera_link">
+    <visual>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="base_link_to_camera_link" type="fixed">
+    <parent link="base_link"/>
+    <child link="iris/camera_link"/>
+    <!-- Values from mavros_depth.launch: args="0.1 0 0.0 -1.57 0 -1.57 base_link iris/camera_link 33" -->
+    <origin xyz="0.1 0 0.0" rpy="-1.57 0 -1.57"/>
+  </joint>
+</robot>

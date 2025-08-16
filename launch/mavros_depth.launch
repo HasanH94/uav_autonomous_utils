@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- MAVROS posix SITL environment launch script -->
+    <!-- launches MAVROS, PX4 SITL, Gazebo environment, and spawns vehicle -->
+    <!-- vehicle pose -->
+    <arg name="x" default="0"/>
+    <arg name="y" default="0"/>
+    <arg name="z" default="1"/>
+    <arg name="R" default="0"/>
+    <arg name="P" default="0"/>
+    <arg name="Y" default="0"/>
+    <!-- vehicle model and world -->
+    <arg name="est" default="ekf2"/>
+    <arg name="vehicle" default="iris"/>
+    <arg name="world" default="/home/hasan/research_ws/src/uav_autonomous_utils/src/empty_2.world"/>
+    <arg name="sdf" default="/home/hasan/research_ws/src/uav_autonomous_utils/src/iris_depth_camera/iris_depth_camera.sdf"/>
+    <!-- gazebo configs -->
+    <arg name="gui" default="false"/>
+    <arg name="debug" default="false"/>
+    <arg name="verbose" default="false"/>
+    <arg name="paused" default="false"/>
+    <arg name="respawn_gazebo" default="false"/>
+    <!-- MAVROS configs -->
+    <arg name="fcu_url" default="udp://:14540@localhost:14557"/>
+    <arg name="respawn_mavros" default="false"/>
+    <!-- PX4 configs -->
+    <arg name="interactive" default="true"/>
+    <!-- PX4 SITL and Gazebo -->
+    <include file="$(find px4)/launch/posix_sitl.launch">
+        <arg name="x" value="$(arg x)"/>
+        <arg name="y" value="$(arg y)"/>
+        <arg name="z" value="$(arg z)"/>
+        <arg name="R" value="$(arg R)"/>
+        <arg name="P" value="$(arg P)"/>
+        <arg name="Y" value="$(arg Y)"/>
+        <arg name="world" value="$(arg world)"/>
+        <arg name="vehicle" value="$(arg vehicle)"/>
+        <arg name="sdf" value="$(arg sdf)"/>
+        <arg name="gui" value="$(arg gui)"/>
+        <arg name="interactive" value="$(arg interactive)"/>
+        <arg name="debug" value="$(arg debug)"/>
+        <arg name="verbose" value="$(arg verbose)"/>
+        <arg name="paused" value="$(arg paused)"/>
+        <arg name="respawn_gazebo" value="$(arg respawn_gazebo)"/>
+    </include>
+    <!-- MAVROS -->
+    <include file="$(find mavros)/launch/px4.launch">
+        <!-- GCS link is provided by SITL -->
+        <arg name="gcs_url" value=""/>
+        <arg name="fcu_url" value="$(arg fcu_url)"/>
+        <arg name="respawn_mavros" value="$(arg respawn_mavros)"/>
+        <arg name="fcu_protocol" value="v2.0" />
+        <!-- <rosparam file="$(find uav_autonomous_utils)/config/mavros_local_position.yaml" command="load" /> -->
+        <!-- <param name="/mavros/local_position/tf/send" value="true" /> -->
+    </include>
+
+    <node pkg="tf" type="static_transform_publisher" name="base_link_to_camera_link_node" args="0.1 0 0.0 -1.57 0 -1.57 base_link iris/camera_link 33"/>
+
+    <!-- GPS to Odometry conversion -->
+    <!-- <node pkg="robot_localization" type="navsat_transform_node" name="navsat_transform" respawn="true">
+        <!-- <rosparam command="load" file="$(find uav_autonomous_utils)/config/navsat_transform.yaml" /> -->
+        <remap from="/imu/data" to="/mavros/imu/data" />
+        <remap from="/gps/fix" to="/mavros/global_position/global" />
+        <remap from="/odometry/filtered" to="/mavros/local_position/odom" />
+    </node> -->
+
+    <!-- EKF for map -> odom -->
+    <!-- <node pkg="robot_localization" type="ekf_localization_node" name="map_to_odom_node">
+        <rosparam command="load" file="$(find opendrone)/config/ekf_global.yaml" />
+        <param name="world_frame" value="map"/>
+    </node> -->
+
+    <!-- <node pkg="robot_localization" type="ekf_localization_node" name="odom_to_base_link_node">
+        <rosparam command="load" file="$(find opendrone)/config/ekf_global.yaml" />
+        <param name="world_frame" value="odom"/>
+    </node> -->
+
+
+    <!-- <node pkg="opendrone" type="tf_to_pose.py" name="camera_pose_publisher" output="screen">
+        <param name="parent_frame" value="odom"/>
+        <param name="child_frame" value="iris/camera_link"/>
+        <param name="topic" value="/camera/pose"/>
+    </node> -->
+
+
+    <!-- <include file="$(find opendrone)/launch/sitl_geometric_controller.launch">
+    </include> -->
+
+
+    <!-- <node pkg="simple_message_to_tf" type="message_to_tf" name="odom_to_base_link_node" output="screen">
+        <param name="odometry_topic" value="/mavros/local_position/odom" />
+        <param name="frame_id" value="odom" />
+        <param name="child_frame_id" value="base_link" />
+    </node> -->
+
+    <!-- <node pkg="tf" type="static_transform_publisher" name="odom_map_linker" args="0 0 0 0 0 0 map odom 100" /> -->
+    <!-- <node pkg="tf" type="static_transform_publisher" name="odom_base_link_linker" args="0 0 0 0 0 0 odom base_link 100" /> -->
+
+    <!-- <node pkg="opendrone" type="altitude_to_pose.py" name="altitude_to_pose_node" output="screen"/> -->
+
+    <!-- Commented out to use GPS-based localization instead of VSLAM -->
+    <!-- <include file="$(find uav_autonomous_utils)/src/rtabmap_drone.launch"/> -->
+
+</launch>

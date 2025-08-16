@@ -1,0 +1,47 @@
+<launch>
+  <!-- Arguments for RTAB-Map -->
+  <arg name="localization"      default="false"/>
+  <arg name="database_path"     default="~/.ros/rtabmap.db"/>
+  <arg name="rtabmap_args"      default="--delete_db_on_start"/>
+  <arg name="visual_odometry"   default="true"/>
+  <arg name="odom_topic"        default="/odom"/>
+  <arg name="frame_id"          default="base_link"/>
+  <arg name="imu_topic"         default="/mavros/imu/data"/>
+  <arg name="rgb_topic"         default="/iris/camera/rgb/image_raw"/>
+  <arg name="depth_topic"       default="/iris/camera/depth/image_raw"/>
+  <arg name="camera_info_topic" default="/iris/camera/rgb/camera_info"/>
+
+  <!-- RTAB-Map's main launch file -->
+  <node pkg="nodelet" type="nodelet" name="rgbd_sync" args="standalone rtabmap_sync/rgbd_sync">
+    <remap from="rgb/image"       to="$(arg rgb_topic)"/>
+    <remap from="depth/image"     to="$(arg depth_topic)"/>
+    <remap from="rgb/camera_info" to="$(arg camera_info_topic)"/>
+    <remap from="rgbd_image"      to="/rtabmap/rgbd_image"/>
+    <param name="approx_sync" type="bool" value="true"/>
+  </node>
+
+  <include file="$(find rtabmap_ros)/launch/rtabmap.launch">
+    <!-- Basic settings -->
+    <arg name="rtabmap_args"      value="$(arg rtabmap_args)"/>
+    <arg name="database_path"     value="$(arg database_path)"/>
+    <arg name="frame_id"          value="$(arg frame_id)"/>
+    <arg name="localization"      value="$(arg localization)"/>
+    <arg name="subscribe_rgbd"    value="true"/>
+    <!-- <arg name="subscribe_depth"    value="false"/> -->
+    <arg name="subscribe_scan"    value="false"/>
+
+    <!-- Remapping topics -->
+    <arg name="rgb_topic"         value="$(arg rgb_topic)"/>
+    <arg name="depth_topic"       value="$(arg depth_topic)"/>
+    <arg name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <arg name="imu_topic"         value="$(arg imu_topic)"/>
+    <arg name="odom_topic"        value="$(arg odom_topic)"/>
+
+    <!-- Visual odometry settings -->
+    <arg name="visual_odometry"   value="$(arg visual_odometry)"/>
+    <arg name="vo_frame_id"       value="$(arg frame_id)"/>
+
+    <!-- Output settings -->
+    <arg name="publish_tf_map"    value="true"/>
+  </include>
+</launch>

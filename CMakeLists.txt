@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(othmanPack)
+project(uav_autonomous_utils)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -13,6 +13,15 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   # Add other ROS 1 dependencies here
 )
+
+find_package(PCL REQUIRED)
+include_directories(
+  include
+	${catkin_INCLUDE_DIRS}
+	${PCL_INCLUDE_DIRS}
+)
+
+message(STATUS "PCL include directories: ${PCL_INCLUDE_DIRS} !!!!!!!!!!!!!!!!!!!!!!!!")
 
 
 

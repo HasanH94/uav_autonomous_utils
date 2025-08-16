@@ -1,0 +1,266 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- MAVROS posix SITL environment launch script -->
+    <!-- launches MAVROS, PX4 SITL, Gazebo environment, and spawns vehicle -->
+    <!-- vehicle pose -->
+    <arg name="x" default="0"/>
+    <arg name="y" default="0"/>
+    <arg name="z" default="0.2"/>
+    <arg name="R" default="0"/>
+    <arg name="P" default="0"/>
+    <arg name="Y" default="0"/>
+    <arg name="target_x" default="5"/>
+    <arg name="target_y" default="0"/>
+    <arg name="target_z" default="1"/>
+    <!-- vehicle model and world -->
+    <arg name="est" default="ekf2"/>
+    <arg name="vehicle" default="iris"/>
+    <arg name="world" default="$(find uav_autonomous_utils)/src/empty_2.world"/>
+    <arg name="sdf" default="$(find uav_autonomous_utils)/src/iris_depth_camera/iris_depth_camera.sdf"/>
+    <!-- gazebo configs -->
+    <arg name="gui" default="false"/>
+    <arg name="debug" default="false"/>
+    <arg name="verbose" default="false"/>
+    <arg name="paused" default="false"/>
+    <arg name="respawn_gazebo" default="false"/>
+    <!-- MAVROS configs -->
+    <arg name="fcu_url" default="udp://:14540@localhost:14557"/>
+    <arg name="respawn_mavros" default="false"/>
+    <!-- PX4 configs -->
+    <arg name="interactive" default="true"/>
+    <!-- PX4 SITL and Gazebo -->
+
+    <include file="$(find px4)/launch/posix_sitl.launch">
+        <arg name="x" value="$(arg x)"/>
+        <arg name="y" value="$(arg y)"/>
+        <arg name="z" value="$(arg z)"/>
+        <arg name="R" value="$(arg R)"/>
+        <arg name="P" value="$(arg P)"/>
+        <arg name="Y" value="$(arg Y)"/>
+        <arg name="world" value="$(arg world)"/>
+        <arg name="vehicle" value="$(arg vehicle)"/>
+        <arg name="sdf" value="$(arg sdf)"/>
+        <arg name="gui" value="$(arg gui)"/>
+        <arg name="interactive" value="$(arg interactive)"/>
+        <arg name="debug" value="$(arg debug)"/>
+        <arg name="verbose" value="$(arg verbose)"/>
+        <arg name="paused" value="$(arg paused)"/>
+        <arg name="respawn_gazebo" value="$(arg respawn_gazebo)"/>
+    </include>
+    
+	<arg name="gcs_url" default="" />
+	<arg name="tgt_system" default="1" />
+	<arg name="tgt_component" default="1" />
+	<arg name="log_output" default="screen" />
+	<arg name="fcu_protocol" default="v2.0" />
+
+	<include file="$(find mavros)/launch/node.launch">
+		<arg name="pluginlists_yaml" value="$(find mavros)/launch/px4_pluginlists.yaml" />
+		<arg name="config_yaml" value="$(find uav_autonomous_utils)/config/px4_config.yaml" />
+
+		<arg name="fcu_url" value="$(arg fcu_url)" />
+		<arg name="gcs_url" value="$(arg gcs_url)" />
+		<arg name="tgt_system" value="$(arg tgt_system)" />
+		<arg name="tgt_component" value="$(arg tgt_component)" />
+		<arg name="log_output" value="$(arg log_output)" />
+		<arg name="fcu_protocol" value="$(arg fcu_protocol)" />
+		<arg name="respawn_mavros" default="$(arg respawn_mavros)" />
+	</include>
+
+    
+
+    <!-- Publish the robot state to TF -->
+    <!-- <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" /> -->
+
+    <node pkg="tf" type="static_transform_publisher" name="base_link_to_camera_link_node" args="0.1 0 0.035 -1.57 0 -1.57 base_link iris/camera_link 33"/>
+
+    <!-- Load the URDF model into the /robot_description parameter -->
+    <param name="robot_description" command="$(find xacro)/xacro $(find uav_autonomous_utils)/models/iris_drone.urdf --inorder" />
+
+    <node pkg="uav_autonomous_utils" type="tf_to_pose.py" name="camera_pose_publisher" output="screen">
+        <param name="parent_frame" value="odom"/>
+        <param name="child_frame" value="iris/camera_link"/>
+        <param name="topic" value="/camera/pose"/>
+    </node>
+
+    <node pkg="uav_autonomous_utils" type="map_to_odom_publisher.py" name="map_to_odom_publisher" output="screen"/>
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find uav_autonomous_utils)/rviz/rviz.rviz" output="screen"/>
+
+    <node pkg="uav_autonomous_utils" type="aruco_pose_offset_publisher.py" name="aruco_pose_offset_publisher" output="log">
+        <param name="marker_id"            value="1"/>
+        <param name="marker_size"          value="0.6"/>
+        <param name="z_offset"             value="1.2"/>
+        <param name="y_offset"             value="0.0"/>
+        <param name="x_offset"             value="0.0"/>
+        <param name="target_frame"         value="odom"/>
+        <param name="enable_visualization" value="false"/>
+        <param name="output_goal_topic"    value="/move_base_visual"/>
+        <param name="camera_info_topic"    value="/iris/camera/rgb/camera_info"/>
+    </node>
+
+    <!-- RAST Mapping Node -->
+    <!-- This node creates the dynamic risk map from sensor data. -->
+    <!-- <node pkg="rast_corridor_planning" name="sliding_map_node" type="map_sim_example" output="log">
+        <rosparam file="$(find uav_autonomous_utils)/config/rast_planning.yaml" command="load" />
+        <remap from="/camera_front/depth/points" to="/iris/camera/depth/points" />
+    </node> -->
+
+    <!-- Map Manager Node (Occupancy Map) -->
+    <!-- <rosparam file="$(find uav_autonomous_utils)/config/occupancy_map_param.yaml" ns="/occupancy_map"  />
+    <node pkg="map_manager" type="occupancy_map_node" name="occupancy_map_node" output="screen">
+    </node> -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- <include file="$(find uav_autonomous_utils)/src/target_detection.launch"></include> -->
+
+    <!-- 3. Depth Image to Laser Scan Converter -->
+    <!-- <node pkg="depthimage_to_laserscan" type="depthimage_to_laserscan" name="depthimage_to_laserscan_node">
+        <remap from="image" to="/iris/camera/depth/image_raw"/>
+        <remap from="camera_info" to="/iris/camera/depth/camera_info"/>
+        <remap from="scan" to="/scan_from_depth_camera"/>
+        <param name="output_frame_id" value="iris/camera_link"/>
+    </node> -->
+
+    <!-- 4. Drone State Machine -->
+    <!-- <node pkg="uav_autonomous_utils" type="drone_state_machine.py" name="drone_state_machine" output="screen" /> -->
+
+    <!-- EGO Planner -->
+    <!-- <node pkg="ego_planner" name="ego_planner_node" type="ego_planner_node" output="screen">
+        <remap from="~odom_world" to="/mavros/local_position/odom"/>
+        <remap from="~planning/bspline" to="/drone_0_planning/bspline"/>
+        <remap from="~planning/data_display" to="/drone_0_planning/data_display"/>
+        <remap from="~planning/broadcast_bspline_from_planner" to="/broadcast_bspline"/>
+        <remap from="~planning/broadcast_bspline_to_planner" to="/broadcast_bspline"/>
+        <remap from="/vins_estimator/extrinsic" to="/mavros/local_position/odom"/>
+        <remap from="~grid_map/odom" to="/mavros/global_position/local"/>
+        <remap from="~grid_map/cloud" to="/iris/camera/depth/points"/>
+        <remap from="~grid_map/pose" to="/camera/pose"/>
+        <remap from="~grid_map/depth" to="/camera/depth/image_raw"/> -->
+
+        <!-- <param name="fsm/flight_type" value="2" type="int"/>
+        <param name="fsm/thresh_replan_time" value="1.0" type="double"/>
+        <param name="fsm/thresh_no_replan_meter" value="1.0" type="double"/>
+        <param name="fsm/planning_horizon" value="7.5" type="double"/>
+        <param name="fsm/planning_horizen_time" value="3" type="double"/>
+        <param name="fsm/emergency_time" value="1.0" type="double"/>
+        <param name="fsm/realworld_experiment" value="false"/>
+        <param name="fsm/fail_safe" value="true"/>
+        <param name="fsm/waypoint_num" value="1" type="int"/>
+        <param name="fsm/waypoint0_x" value="$(arg target_x)" type="double"/>
+        <param name="fsm/waypoint0_y" value="$(arg target_y)" type="double"/>
+        <param name="fsm/waypoint0_z" value="$(arg target_z)" type="double"/> -->
+
+        <!-- <param name="grid_map/resolution" value="0.1"/>
+        <param name="grid_map/map_size_x" value="40.0"/>
+        <param name="grid_map/map_size_y" value="40.0"/>
+        <param name="grid_map/map_size_z" value="10.0"/>
+        <param name="grid_map/local_update_range_x" value="5.5"/>
+        <param name="grid_map/local_update_range_y" value="5.5"/>
+        <param name="grid_map/local_update_range_z" value="4.5"/>
+        <param name="grid_map/obstacles_inflation" value="0.4"/>
+        <param name="grid_map/local_map_margin" value="10"/>
+        <param name="grid_map/ground_height" value="-2"/>
+        <param name="grid_map/cx" value="321.04638671875"/>
+        <param name="grid_map/cy" value="243.44969177246094"/>
+        <param name="grid_map/fx" value="387.229248046875"/>
+        <param name="grid_map/fy" value="387.229248046875"/>
+        <param name="grid_map/use_depth_filter" value="true"/>
+        <param name="grid_map/depth_filter_tolerance" value="0.15"/>
+        <param name="grid_map/depth_filter_maxdist" value="5.0"/>
+        <param name="grid_map/depth_filter_mindist" value="0.2"/>
+        <param name="grid_map/depth_filter_margin" value="2"/>
+        <param name="grid_map/k_depth_scaling_factor" value="1000.0"/>
+        <param name="grid_map/skip_pixel" value="2"/>
+        <param name="grid_map/p_hit" value="0.65"/>
+        <param name="grid_map/p_miss" value="0.35"/>
+        <param name="grid_map/p_min" value="0.12"/>
+        <param name="grid_map/p_max" value="0.90"/>
+        <param name="grid_map/p_occ" value="0.80"/>
+        <param name="grid_map/min_ray_length" value="0.1"/>
+        <param name="grid_map/max_ray_length" value="4.5"/>
+        <param name="grid_map/virtual_ceil_height" value="2.9"/>
+        <param name="grid_map/visualization_truncate_height" value="1.8"/>
+        <param name="grid_map/show_occ_time" value="false"/>
+        <param name="grid_map/pose_type" value="2"/>
+        <param name="grid_map/frame_id" value="map"/> -->
+
+        <!-- <param name="manager/max_vel" value="2.0" type="double"/>
+        <param name="manager/max_acc" value="3.0" type="double"/>
+        <param name="manager/max_jerk" value="4" type="double"/>
+        <param name="manager/control_points_distance" value="0.4" type="double"/>
+        <param name="manager/feasibility_tolerance" value="0.05" type="double"/>
+        <param name="manager/planning_horizon" value="7.5" type="double"/>
+        <param name="manager/use_distinctive_trajs" value="true" type="bool"/>
+        <param name="manager/drone_id" value="0"/> -->
+
+        <!-- <param name="optimization/lambda_smooth" value="1.0" type="double"/>
+        <param name="optimization/lambda_collision" value="50.0" type="double"/>
+        <param name="optimization/lambda_feasibility" value="0.1" type="double"/>
+        <param name="optimization/lambda_fitness" value="1.0" type="double"/>
+        <param name="optimization/dist0" value="0.5" type="double"/>
+        <param name="optimization/swarm_clearance" value="0.5" type="double"/>
+        <param name="optimization/max_vel" value="2.0" type="double"/>
+        <param name="optimization/max_acc" value="3.0" type="double"/> -->
+
+        <!-- <param name="bspline/limit_vel" value="2.0" type="double"/>
+        <param name="bspline/limit_acc" value="3.0" type="double"/>
+        <param name="bspline/limit_ratio" value="1.1" type="double"/> -->
+
+        <!-- <param name="prediction/obj_num" value="10" type="int"/>
+        <param name="prediction/lambda" value="1.0" type="double"/>
+        <param name="prediction/predict_rate" value="1.0" type="double"/>
+    </node> -->
+
+    <!-- <node pkg="ego_planner" name="traj_server" type="traj_server" output="screen">
+        <remap from="position_cmd" to="/drone_0_planning/pos_cmd"/>
+        <remap from="~planning/bspline" to="/drone_0_planning/bspline"/>
+        <param name="traj_server/time_forward" value="1.0" type="double"/>
+    </node> -->
+
+    <!-- APF Local Planner -->
+    <!-- <include file="$(find apf_local_planner)/launch/apf_local_planner.launch"/> -->
+
+    <!-- Load parameters for the reinforcement learning agent -->
+    <!-- <rosparam command="load" file="$(find reinforcement_drone)/config/x_y_deepq_params_v0.yaml" /> -->
+
+    <!-- Launch the reinforcement learning agent node -->
+    <!-- <node pkg="reinforcement_drone" name="x_y_deepq" type="x_y_deepq_v0.py" output="screen">
+        <param name="nepisodes" value="1"/>
+        <remap from="/drone/gt_pose" to="/camera/pose"/>
+        <remap from="/drone/gt_vel" to="/map_to_odom"/>
+    </node> -->
+
+    <!-- Dummy Sonar Publisher to satisfy drone_env.py's dependency -->
+    <!-- <node name="dummy_sonar_publisher" pkg="rospy_tutorials" type="talker.py" output="screen">
+        <param name="/topic_name" value="/drone/sonar"/>
+        <param name="/message_type" value="sensor_msgs/Range"/>
+        <param name="/message_data" value="{header: {stamp: now, frame_id: 'sonar_link'}, radiation_type: 0, field_of_view: 0.5, min_range: 0.1, max_range: 10.0, range: 1.0}"/>
+        <param name="/publish_rate" value="10"/>
+    </node> -->
+
+    <!-- OctoMap Server Node -->
+    <!-- <node pkg="octomap_server" type="octomap_server_node" name="octomap_server">
+        <param name="resolution" value="0.3" />
+        <param name="frame_id" value="odom" />
+        <param name="sensor_model/max_range" value="5.0" />
+        <param name="publish_free_space" value="false" />
+        <remap from="cloud_in" to="/iris/camera/depth/points" />
+    </node> -->
+
+</launch>

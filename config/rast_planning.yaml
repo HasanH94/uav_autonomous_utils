@@ -1,0 +1,46 @@
+# A*
+max_vel: 1.5
+max_acc: 2.5
+
+use_height_limit: false
+height_limit_max: 5
+height_limit_min: 0.5
+sample_z_acc: false
+
+a_star_acc_sample_step: 2.0
+a_star_search_time_step: 1.2
+
+risk_threshold_motion_primitive: 0.3
+expand_safety_distance: 0.2
+
+# Corridor
+risk_threshold_single_voxel: 0.15
+risk_threshold_corridor: 3.0
+
+
+# Trajectory planner
+planning_time_step: 0.05
+trajectory_piece_max_size: 8
+
+pos_factor: 0.5
+vel_factor: 0.0
+acc_factor: 0.0
+jerk_factor: 1.0
+snap_factor: 1.0  # minimum snap
+delta_corridor: 0.4
+
+max_vel_optimization: 1.7 # Constraint in optimization. A little larger than max_vel
+max_acc_optimization: 2.7 # Constraint in optimization. A little larger than max_acc
+
+
+# Mapping
+observation_stddev: 0.1
+localization_stddev: 0 
+
+# Visualization
+rviz_map_center_locked: false
+
+# Others
+max_differentiated_current_a: 3.0
+
+

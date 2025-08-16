@@ -1,0 +1,9 @@
+frequency: 50.0
+magnetic_declination_radians: 0.0  # Set this to your local magnetic declination
+yaw_offset: 0 #1.570796327  # Offset of the IMU frame from ENU, 90 degrees for a standard drone
+zero_altitude: false
+broadcast_cartesian_transform: true
+broadcast_utm_transform : false
+publish_filtered_gps: false
+use_odometry_yaw: true #set to true only if the odometry topic published the base_link coordinates relative to the earth's ref frame
+wait_for_datum: false

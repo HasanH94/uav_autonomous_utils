@@ -1,6 +1,0 @@
-devel_space: /home/hasan/research_ws/src/othmanPack/devel
-install: false
-install_space: /home/hasan/research_ws/src/othmanPack/install
-profile: default
-source_space: /home/hasan/research_ws/src/othmanPack/src
-workspace: /home/hasan/research_ws/src/othmanPack
