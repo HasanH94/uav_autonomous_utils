@@ -1,5 +1,5 @@
 <launch>
-    <node pkg="uav_autonomous_utils" type="drone_state_machine.py" name="drone_state_machine" output="screen">
+    <node pkg="uav_autonomous_utils" type="state_machine/drone_state_machine.py" name="drone_state_machine" output="screen">
         <rosparam param="goal_points">[[12.0, -1.0, 3.0], [12.0, 20.0, 3.0]]</rosparam>
         <rosparam param="home_position">[0.0, 0.0, 2.0]</rosparam>
         <param name="gps_grace_period" value="3.0" />

@@ -3,7 +3,7 @@
     <!-- This launch file defines the nodes active during the object search phase. -->
 
     <!-- Node to make the drone spin in place to search for an object -->
-    <node pkg="uav_autonomous_utils" type="search_for_object_node.py" name="object_searcher" output="screen">
+    <node pkg="uav_autonomous_utils" type="state_machine/search_for_object_node.py" name="object_searcher" output="screen">
         <param name="rotation_speed" value="0.5" />
         <param name="search_duration" value="20.0" />
     </node>

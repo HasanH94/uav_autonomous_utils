@@ -1,6 +1,6 @@
 <launch>
     <!-- Our Goal-to-Velocity PID Controller -->
-    <!-- <node pkg="uav_autonomous_utils" type="goal_to_velocity_pid.py" name="goal_to_velocity_pid" output="screen">
+    <!-- <node pkg="uav_autonomous_utils" type="control/goal_to_velocity_pid.py" name="goal_to_velocity_pid" output="screen">
         <rosparam param="kp">[0.6, 0.6, 0.6, 0.8]</rosparam>
         <rosparam param="ki">[0.08, 0.08, 0.08, 0.0]</rosparam>
         <rosparam param="kd">[0.1, 0.1, 0.1, 0.1]</rosparam>
@@ -12,7 +12,7 @@
         <remap from="/move_base_simple/goal" to="/move_base_visual"/>
     </node> -->
 
-    <node pkg="uav_autonomous_utils" type="slidingModeController.py" name="pid_visual" output="screen">
+    <node pkg="uav_autonomous_utils" type="control/slidingModeController.py" name="pid_visual" output="screen">
         <rosparam param="kp">[0.5, 0.5, 0.5, 0.8]</rosparam>
         <rosparam param="ki">[0.06, 0.1, 0.1, 0.0]</rosparam>
         <rosparam param="kd">[0.1, 0.1, 0.1, 0.1]</rosparam>

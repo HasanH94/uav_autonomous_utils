@@ -76,7 +76,7 @@
     </node> -->
 
 
-    <!-- <node pkg="opendrone" type="tf_to_pose.py" name="camera_pose_publisher" output="screen">
+    <!-- <node pkg="opendrone" type="transform_utils/tf_to_pose.py" name="camera_pose_publisher" output="screen">
         <param name="parent_frame" value="odom"/>
         <param name="child_frame" value="iris/camera_link"/>
         <param name="topic" value="/camera/pose"/>

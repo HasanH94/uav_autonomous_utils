@@ -1,7 +1,7 @@
 <launch>
     <!-- HYBRID YAW PID CONTROLLER (MASTER) -->
     <!-- This node calculates the desired yaw rate and combines it with the linear velocity from the VFH3D node. -->
-    <node pkg="uav_autonomous_utils" type="hybrid_yaw_rate_pid.py" name="hybrid_yaw_controller" output="screen">
+    <node pkg="uav_autonomous_utils" type="control/hybrid_yaw_rate_pid.py" name="hybrid_yaw_controller" output="screen">
         <!-- PID gains for Yaw -->
         <param name="kp_yaw" value="0.8" />
         <param name="ki_yaw" value="0.0" />

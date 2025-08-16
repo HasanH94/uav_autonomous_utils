@@ -1,5 +1,5 @@
 <launch>
-    <node pkg="uav_autonomous_utils" type="trajectory_follower_with_hybrid_yaw_control.py" name="trajectory_follower_with_yaw_control" output="screen">
+    <node pkg="uav_autonomous_utils" type="control/trajectory_follower_with_hybrid_yaw_control.py" name="trajectory_follower_with_yaw_control" output="screen">
         <!-- PID gains for Yaw -->
         <param name="kp_yaw" value="0.8" />
         <param name="ki_yaw" value="0.1" />

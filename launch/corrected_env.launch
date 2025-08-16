@@ -15,8 +15,8 @@
     <!-- vehicle model and world -->
     <arg name="est" default="ekf2"/>
     <arg name="vehicle" default="iris"/>
-    <arg name="world" default="$(find uav_autonomous_utils)/src/empty_2.world"/>
-    <arg name="sdf" default="$(find uav_autonomous_utils)/src/iris_depth_camera/iris_depth_camera.sdf"/>
+    <arg name="world" default="$(find uav_autonomous_utils)/worlds/simulation.world"/>
+    <arg name="sdf" default="$(find uav_autonomous_utils)/models/iris_depth_camera/iris_depth_camera.sdf"/>
     <!-- gazebo configs -->
     <arg name="gui" default="false"/>
     <arg name="debug" default="false"/>
@@ -77,17 +77,17 @@
     <!-- Load the URDF model into the /robot_description parameter -->
     <param name="robot_description" command="$(find xacro)/xacro $(find uav_autonomous_utils)/models/iris_drone.urdf --inorder" />
 
-    <node pkg="uav_autonomous_utils" type="tf_to_pose.py" name="camera_pose_publisher" output="screen">
+    <node pkg="uav_autonomous_utils" type="transform_utils/tf_to_pose.py" name="camera_pose_publisher" output="screen">
         <param name="parent_frame" value="odom"/>
         <param name="child_frame" value="iris/camera_link"/>
         <param name="topic" value="/camera/pose"/>
     </node>
 
-    <node pkg="uav_autonomous_utils" type="map_to_odom_publisher.py" name="map_to_odom_publisher" output="screen"/>
+    <node pkg="uav_autonomous_utils" type="transform_utils/map_to_odom_publisher.py" name="map_to_odom_publisher" output="screen"/>
 
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find uav_autonomous_utils)/rviz/rviz.rviz" output="screen"/>
 
-    <node pkg="uav_autonomous_utils" type="aruco_pose_offset_publisher.py" name="aruco_pose_offset_publisher" output="log">
+    <node pkg="uav_autonomous_utils" type="vision/aruco_pose_offset_publisher.py" name="aruco_pose_offset_publisher" output="log">
         <param name="marker_id"            value="1"/>
         <param name="marker_size"          value="0.6"/>
         <param name="z_offset"             value="1.2"/>
@@ -138,7 +138,7 @@
     </node> -->
 
     <!-- 4. Drone State Machine -->
-    <!-- <node pkg="uav_autonomous_utils" type="drone_state_machine.py" name="drone_state_machine" output="screen" /> -->
+    <!-- <node pkg="uav_autonomous_utils" type="state_machine/drone_state_machine.py" name="drone_state_machine" output="screen" /> -->
 
     <!-- EGO Planner -->
     <!-- <node pkg="ego_planner" name="ego_planner_node" type="ego_planner_node" output="screen">

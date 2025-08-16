@@ -1,5 +1,5 @@
 <launch>
-    <node pkg="uav_autonomous_utils" type="goal_to_velocity_pid.py" name="goal_to_velocity_pid" output="screen">
+    <node pkg="uav_autonomous_utils" type="control/goal_to_velocity_pid.py" name="goal_to_velocity_pid" output="screen">
         <remap from="/move_base_simple/goal" to="/move_base_mission"/>
         <remap from="/mavros/local_position/odom" to="/mavros/local_position/odom"/>
         <remap from="/uav/attractive_velocity" to="/uav/attractive_velocity"/>

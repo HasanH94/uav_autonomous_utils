@@ -3,6 +3,6 @@
     <!-- This launch file defines the nodes active during task execution. -->
 
     <!-- Node to perform the task -->
-    <node pkg="uav_autonomous_utils" type="perform_task_node.py" name="perform_task_node" output="screen" />
+    <node pkg="uav_autonomous_utils" type="state_machine/perform_task_node.py" name="perform_task_node" output="screen" />
 
 </launch>

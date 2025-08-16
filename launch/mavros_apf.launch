@@ -75,7 +75,7 @@
     <node pkg="tf" type="static_transform_publisher" name="base_link_to_camera_link_node" args="0.1 0 0.0 -1.57 0 -1.57 base_link iris/camera_link 33"/>
 
 
-    <node pkg="opendrone" type="tf_to_pose.py" name="camera_pose_publisher" output="screen">
+    <node pkg="opendrone" type="transform_utils/tf_to_pose.py" name="camera_pose_publisher" output="screen">
         <param name="parent_frame" value="odom"/>
         <param name="child_frame" value="iris/camera_link"/>
         <param name="topic" value="/camera/pose"/>
@@ -104,7 +104,7 @@
         <remap from="~/twist_out" to="/mavros/setpoint_velocity/cmd_vel"/>
     </node>
 
-    <node pkg="uav_autonomous_utils" type="map_to_odom_publisher.py" name="map_to_odom_publisher" output="screen"/>
+    <node pkg="uav_autonomous_utils" type="transform_utils/map_to_odom_publisher.py" name="map_to_odom_publisher" output="screen"/>
 
 
 
