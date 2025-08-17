@@ -445,6 +445,9 @@ class TrajectoryAwarePIDController:
                 
             yaw_rate = np.clip(yaw_rate, -self.max_yaw_rate, self.max_yaw_rate)
             
+            # DEBUGGING: Log the output before publishing
+            rospy.loginfo(f"[PID DEBUG] Output Vel: linear=[{linear_vel[0]:.2f}, {linear_vel[1]:.2f}, {linear_vel[2]:.2f}], angular_z=[{yaw_rate:.2f}]")
+
             # Publish velocity command
             vel_msg = TwistStamped()
             vel_msg.header.stamp = rospy.Time.now()
