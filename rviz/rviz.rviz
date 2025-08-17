@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /TF1/Frames1
+        - /iris_pcl1
       Splitter Ratio: 0.6117647290229797
     Tree Height: 333
   - Class: rviz/Selection
@@ -212,7 +213,7 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 5
       Selectable: true
-      Size (Pixels): 3
+      Size (Pixels): 5
       Size (m): 0.10000000149011612
       Style: Points
       Topic: /iris/camera/depth/points
@@ -264,9 +265,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7047978043556213
+      Pitch: 0.6397978663444519
       Target Frame: <Fixed Frame>
-      Yaw: 2.9203906059265137
+      Yaw: 3.0403926372528076
     Saved: ~
 Window Geometry:
   Displays:

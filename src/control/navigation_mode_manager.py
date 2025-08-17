@@ -109,7 +109,7 @@ class NavigationModeManager:
             
     def gps_goal_callback(self, msg):
         self.gps_target = msg
-        rospy.loginfo(f"GPS target updated: ({msg.pose.position.x:.2f}, {msg.pose.position.y:.2f}, {msg.pose.position.z:.2f})")
+        # rospy.loginfo(f"GPS target updated: ({msg.pose.position.x:.2f}, {msg.pose.position.y:.2f}, {msg.pose.position.z:.2f})")
         
         # Auto-switch to GPS mode if configured
         if self.auto_switch_modes and self.current_mode == NavigationMode.HOLD:

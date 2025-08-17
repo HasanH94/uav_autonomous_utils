@@ -223,7 +223,7 @@ class TrajectoryAwarePIDController:
             return True
             
         # Otherwise, reject
-        rospy.logwarn(f"Rejecting {new_priority.name} input - current priority is {self.current_priority.name}")
+        # rospy.logwarn(f"Rejecting {new_priority.name} input - current priority is {self.current_priority.name}")
         return False
         
     def gps_goal_callback(self, msg):
@@ -246,8 +246,8 @@ class TrajectoryAwarePIDController:
         # Reset integrals for new setpoint
         self.integral = np.zeros(4)
         
-        rospy.loginfo(f"GPS position mode: target=({self.target_pos[0]:.2f}, "
-                     f"{self.target_pos[1]:.2f}, {self.target_pos[2]:.2f})")
+        # rospy.loginfo(f"GPS position mode: target=({self.target_pos[0]:.2f}, "
+        #              f"{self.target_pos[1]:.2f}, {self.target_pos[2]:.2f})")
                      
     def visual_goal_callback(self, msg):
         """Handle visual servoing target with high priority"""
@@ -269,8 +269,8 @@ class TrajectoryAwarePIDController:
         # Reset integrals for new setpoint
         self.integral = np.zeros(4)
         
-        rospy.loginfo(f"VISUAL servoing mode: target=({self.target_pos[0]:.2f}, "
-                     f"{self.target_pos[1]:.2f}, {self.target_pos[2]:.2f})")
+        # # rospy.loginfo(f"VISUAL servoing mode: target=({self.target_pos[0]:.2f}, "
+        # #              f"{self.target_pos[1]:.2f}, {self.target_pos[2]:.2f})")
         
     def trajectory_callback(self, msg):
         """Handle trajectory from global planner with medium priority"""
@@ -533,8 +533,8 @@ class TrajectoryAwarePIDController:
                 
             # yaw_rate = np.clip(yaw_rate, -self.max_yaw_rate, self.max_yaw_rate)
             
-            # DEBUGGING: Log the output before publishing
-            rospy.loginfo(f"[PID DEBUG] Output Vel: linear=[{linear_vel[0]:.2f}, {linear_vel[1]:.2f}, {linear_vel[2]:.2f}], angular_z=[{yaw_rate:.2f}]")
+            # # DEBUGGING: Log the output before publishing
+            # # rospy.loginfo(f"[PID DEBUG] Output Vel: linear=[{linear_vel[0]:.2f}, {linear_vel[1]:.2f}, {linear_vel[2]:.2f}], angular_z=[{yaw_rate:.2f}]")
 
             # Publish velocity command
             vel_msg = TwistStamped()

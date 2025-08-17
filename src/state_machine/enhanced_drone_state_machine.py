@@ -47,7 +47,9 @@ class EnhancedDroneStateMachine(Machine):
         self.gps_goal_tolerance = rospy.get_param('~gps_goal_tolerance', 1.0)  # Consider reached if within 1m
         self.visual_gps_tolerance = rospy.get_param('~visual_gps_tolerance', 3.0) # Must be near GPS goal to activate visual
         self.search_timeout = rospy.get_param('~search_timeout', 30.0)
-        
+        self.visual_pos_tolerance = rospy.get_param('~visual_pos_tolerance', 0.1)
+        self.visual_yaw_tolerance_deg = rospy.get_param('~visual_yaw_tolerance_deg', 5.0)
+
         # State tracking
         self.current_mission_goal_index = 0
         self.aruco_detected_consistent = False  # True when detection is consistent enough
@@ -55,6 +57,7 @@ class EnhancedDroneStateMachine(Machine):
         self.navigation_mode = "hold"
         self.search_timer = None
         self.current_pose = None  # Initialize pose
+        self.visual_target_pose = None # Store visual target pose
         self.mavros_state = State()  # Initialize state
         
         # Services
@@ -65,6 +68,9 @@ class EnhancedDroneStateMachine(Machine):
         self.nav_mode_client = rospy.ServiceProxy('/navigation/set_mode', SetNavigationMode)
         self.mavros_mode_client = rospy.ServiceProxy('/mavros/set_mode', SetMode)
         self.arming_client = rospy.ServiceProxy('/mavros/cmd/arming', CommandBool)
+
+        # Periodic check for goal status
+        self.goal_check_timer = rospy.Timer(rospy.Duration(0.1), self.check_goal_status)
         
         # Publishers
         self.mission_goal_pub = rospy.Publisher('/move_base_mission', PoseStamped, queue_size=10)
@@ -87,12 +93,13 @@ class EnhancedDroneStateMachine(Machine):
         rospy.Subscriber('/aruco_detection_status', Bool, self.aruco_status_callback)
         
         # Event triggers
-        rospy.Subscriber('/drone_events/reached_goal_point', Bool, self.goal_reached_callback)
+        # rospy.Subscriber('/drone_events/reached_goal_point', Bool, self.goal_reached_callback) # Removed, now handled internally
         rospy.Subscriber('/drone_events/task_done', Bool, self.task_done_callback)
         
         # MAVROS state
         rospy.Subscriber('/mavros/state', State, self.mavros_state_callback)
         rospy.Subscriber('/mavros/local_position/pose', PoseStamped, self.pose_callback)
+        rospy.Subscriber('/move_base_visual', PoseStamped, self.visual_target_callback) # New subscription for visual target
         
     def setup_transitions(self):
         # From idle
@@ -195,7 +202,58 @@ class EnhancedDroneStateMachine(Machine):
         
         distance = math.sqrt(dx*dx + dy*dy + dz*dz)
         return distance <= self.visual_gps_tolerance
+
+    def check_visual_goal_reached_conditions(self):
+        if not self.current_pose or not self.visual_target_pose:
+            rospy.loginfo_throttle(1.0, f"Visual Goal Check: current_pose or visual_target_pose is None. current_pose: {self.current_pose is not None}, visual_target_pose: {self.visual_target_pose is not None}")
+            return False
+
+        # Position check
+        dx = self.visual_target_pose.pose.position.x - self.current_pose.pose.position.x
+        dy = self.visual_target_pose.pose.position.y - self.current_pose.pose.position.y
+        dz = self.visual_target_pose.pose.position.z - self.current_pose.pose.position.z
+        pos_distance = math.sqrt(dx*dx + dy*dy + dz*dz)
+
+        pos_reached = pos_distance <= self.visual_pos_tolerance
+
+        # Yaw check
+        q_current = self.current_pose.pose.orientation
+        q_target = self.visual_target_pose.pose.orientation
+
+        _, _, current_yaw = euler_from_quaternion([q_current.x, q_current.y, q_current.z, q_current.w])
+        _, _, target_yaw = euler_from_quaternion([q_target.x, q_target.y, q_target.z, q_target.w])
+
+        yaw_error = target_yaw - current_yaw
+        # Normalize yaw error to -pi to pi
+        while yaw_error > math.pi:
+            yaw_error -= 2 * math.pi
+        while yaw_error < -math.pi:
+            yaw_error += 2 * math.pi
+
+        yaw_error_deg = math.degrees(abs(yaw_error))
+        yaw_reached = yaw_error_deg <= self.visual_yaw_tolerance_deg
+
+        rospy.loginfo_throttle(1.0, f"Visual Goal Check: pos_dist={pos_distance:.2f}m (tol={self.visual_pos_tolerance:.2f}m), yaw_err={yaw_error_deg:.2f}deg (tol={self.visual_yaw_tolerance_deg:.2f}deg)")
+
+        if pos_reached and yaw_reached:
+            rospy.loginfo(f"Visual goal reached: pos_dist={pos_distance:.2f}m (tol={self.visual_pos_tolerance:.2f}m), yaw_err={yaw_error_deg:.2f}deg (tol={self.visual_yaw_tolerance_deg:.2f}deg)")
         
+        return pos_reached and yaw_reached
+
+    def check_gps_goal_reached_conditions(self):
+        if self.state == "gps_navigation":
+            if self.current_pose and self.current_mission_goal_index < len(self.goal_points):
+                goal = self.goal_points[self.current_mission_goal_index]
+                dx = goal[0] - self.current_pose.pose.position.x
+                dy = goal[1] - self.current_pose.pose.position.y
+                dz = goal[2] - self.current_pose.pose.position.z
+                distance = math.sqrt(dx*dx + dy*dy + dz*dz)
+
+                if distance <= self.gps_goal_tolerance:
+                    rospy.loginfo(f"GPS goal reached (within {distance:.2f}m)")
+                    return True
+        return False
+
     # Callbacks
     def nav_mode_callback(self, msg):
         self.navigation_mode = msg.data
@@ -253,27 +311,6 @@ class EnhancedDroneStateMachine(Machine):
             self.aruco_detected_consistent = False
             rospy.loginfo_throttle(1.0, f"Building detection history: {len(self.aruco_detection_history)}/{self.aruco_detection_window_size} frames")
         
-    def goal_reached_callback(self, msg):
-        # For GPS mode, we also check distance to trigger search
-        if self.state == "gps_navigation":
-            # Check distance to GPS goal
-            if self.current_pose and self.current_mission_goal_index < len(self.goal_points):
-                goal = self.goal_points[self.current_mission_goal_index]
-                dx = goal[0] - self.current_pose.pose.position.x
-                dy = goal[1] - self.current_pose.pose.position.y
-                dz = goal[2] - self.current_pose.pose.position.z
-                distance = math.sqrt(dx*dx + dy*dy + dz*dz)
-                
-                if distance <= self.gps_goal_tolerance:
-                    rospy.loginfo(f"GPS goal reached (within {distance:.2f}m)")
-                    self.gps_goal_reached()
-                    
-        elif msg.data:  # For other modes, use the event from PID
-            if self.state == "visual_servoing":
-                self.visual_goal_reached()
-            elif self.state == "returning_home":
-                self.home_reached()
-                
     def task_done_callback(self, msg):
         if msg.data and self.state == "performing_task":
             self.task_completed()
@@ -283,7 +320,20 @@ class EnhancedDroneStateMachine(Machine):
         
     def pose_callback(self, msg):
         self.current_pose = msg
-        
+
+    def visual_target_callback(self, msg):
+        self.visual_target_pose = msg
+
+    def check_goal_status(self, event=None):
+        if self.state == "visual_servoing":
+            if self.check_visual_goal_reached_conditions():
+                rospy.loginfo("Visual goal reached, triggering transition to performing_task")
+                self.visual_goal_reached()
+        elif self.state == "gps_navigation":
+            if self.check_gps_goal_reached_conditions():
+                rospy.loginfo("GPS goal reached, triggering transition to search_for_object or next GPS goal")
+                self.gps_goal_reached()
+
     # Actions
     def increment_goal_index(self, event=None):
         self.current_mission_goal_index += 1

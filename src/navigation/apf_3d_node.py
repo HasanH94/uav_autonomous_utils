@@ -67,6 +67,8 @@ class APF3DNode(object):
 
         # Pub/Sub
         self.pub = rospy.Publisher(self.output_topic, TwistStamped, queue_size=10)
+        # NEW: Publisher for repulsive velocity
+        self.rep_pub = rospy.Publisher("~repulsive_velocity", TwistStamped, queue_size=10)
         rospy.Subscriber(self.attractive_topic, TwistStamped, self.attr_cb, queue_size=10)
         rospy.Subscriber(self.pointcloud_topic, PointCloud2, self.cloud_cb, queue_size=1)
 
@@ -89,6 +91,16 @@ class APF3DNode(object):
             a = np.clip(self.alpha, 0.0, 1.0)
             self.rep_ema = a * rep + (1.0 - a) * self.rep_ema
         self.have_cloud = True
+
+        # NEW: Publish repulsive velocity
+        rep_twist = TwistStamped()
+        rep_twist.header.stamp = rospy.Time.now()
+        rep_twist.header.frame_id = cloud_msg.header.frame_id # Use cloud frame for repulsion
+        rep_twist.twist.linear.x = float(self.rep_ema[0])
+        rep_twist.twist.linear.y = float(self.rep_ema[1])
+        rep_twist.twist.linear.z = float(self.rep_ema[2])
+        self.rep_pub.publish(rep_twist)
+
         # Try to publish immediately using the latest attractive cmd
         self.publish_corrected()
 
