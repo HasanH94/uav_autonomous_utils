@@ -29,6 +29,7 @@ add_message_files(FILES
 generate_messages(DEPENDENCIES
   std_msgs
   geometry_msgs
+  uav_autonomous_utils
 )
 
 catkin_package(

@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /TF1/Frames1
-        - /iris_pcl1/Status1
       Splitter Ratio: 0.6117647290229797
     Tree Height: 333
   - Class: rviz/Selection
@@ -221,21 +220,6 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-    - Alpha: 1
-      Angular Arrow Scale: 2
-      Angular Color: 204; 204; 51
-      Arrow Width: 0.5
-      Class: rviz/TwistStamped
-      Enabled: true
-      Hide Small Values: true
-      History Length: 1
-      Linear Arrow Scale: 2
-      Linear Color: 204; 51; 51
-      Name: apf_vel
-      Queue Size: 10
-      Topic: /mavros/setpoint_velocity/cmd_vel_
-      Unreliable: false
-      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -264,7 +248,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 7.4504594802856445
+      Distance: 15.383633613586426
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -272,17 +256,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: -1.1572543382644653
-        Y: -4.219182014465332
-        Z: 6.141486167907715
+        X: 2.46610689163208
+        Y: 4.86008882522583
+        Z: 7.867593288421631
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.569797933101654
+      Pitch: 0.7897977232933044
       Target Frame: <Fixed Frame>
-      Yaw: 3.9003984928131104
+      Yaw: 2.42539119720459
     Saved: ~
 Window Geometry:
   Displays:

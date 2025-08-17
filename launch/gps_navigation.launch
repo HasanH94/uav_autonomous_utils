@@ -1,5 +1,5 @@
 <launch>
-    <node pkg="uav_autonomous_utils" type="control/goal_to_velocity_pid.py" name="goal_to_velocity_pid" output="screen">
+    <node pkg="uav_autonomous_utils" type="goal_to_velocity_pid.py" name="goal_to_velocity_pid" output="screen">
         <remap from="/move_base_simple/goal" to="/move_base_mission"/>
         <remap from="/mavros/local_position/odom" to="/mavros/local_position/odom"/>
         <remap from="/uav/attractive_velocity" to="/uav_attractive_velocity"/>
@@ -15,19 +15,20 @@
         <param name="eta_0" value="6.0" />
     </node> -->
 
-  <node pkg="my_apf_pkg" type="apf_3d_node.py" name="apf_3d_node" output="screen">
+  <node pkg="uav_autonomous_utils" type="apf_3d_node.py" name="apf_3d_node" output="screen">
     <param name="r" value="6.5000" />
     <param name="eta_xy" value="0.8000" />   <!-- repulsion_gain for XY -->
     <param name="eta_z" value="0.4000" />   <!-- repulsion_gain for Z -->
     <param name="eps" value="0.3000" />  <!-- minimum_distance -->
     <param name="max_rep_norm" value="1.0000" />
     <param name="max_out_norm" value="2.0000" />
-    <param name="alpha" value="0.7000" /> <!-- exp moving average for the repulsion -->
+    <param name="alpha" value="0.7500" /> <!-- exp moving average for the repulsion -->
     <param name="ignore_z" value="false" />
     <param name="max_points" value="10000" />
     <param name="attractive_topic" value="/uav_attractive_velocity" />
-    <param name="pointcloud_topic" value="/points" />
-    <param name="output_topic" value="/cmd_corrected" />
+    <param name="pointcloud_topic" value="/iris/camera/depth/points" />
+    <!-- <param name="output_topic" value="/cmd_corrected" /> -->
+    <param name="output_topic" value="/mavros/setpoint_velocity/cmd_vel" />
   </node>
 
 
