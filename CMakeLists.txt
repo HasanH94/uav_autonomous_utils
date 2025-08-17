@@ -26,6 +26,11 @@ add_message_files(FILES
   SupportArray.msg
 )
 
+# Generate services
+add_service_files(FILES
+  SetNavigationMode.srv
+)
+
 generate_messages(DEPENDENCIES
   std_msgs
   geometry_msgs

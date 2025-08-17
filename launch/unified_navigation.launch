@@ -1,0 +1,109 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- Unified Navigation System Launch File -->
+    <!-- All nodes run continuously - mode switching is handled by the Navigation Mode Manager -->
+    
+    <!-- Navigation Mode Manager - Central coordinator -->
+    <node pkg="uav_autonomous_utils" type="control/navigation_mode_manager.py" name="navigation_mode_manager" output="screen">
+        <param name="control_rate" value="20.0"/>
+        <param name="transition_duration" value="2.0"/>
+        
+        <!-- Yaw control parameters -->
+        <param name="yaw_distance_threshold" value="60.0"/>  <!-- Switch to velocity-aligned yaw beyond this -->
+        <param name="yaw_fov_distance" value="15.0"/>       <!-- Start FOV-aware control within this -->
+        <param name="yaw_injection_distance" value="3.0"/>  <!-- Use exact vision orientation within this -->
+        <param name="yaw_rate_limit" value="0.5"/>
+        <param name="yaw_p_gain" value="1.0"/>
+        
+        <!-- Visual servoing activation -->
+        <param name="visual_activation_distance" value="10.0"/>
+        <param name="visual_confidence_threshold" value="0.7"/>
+        <param name="aruco_timeout" value="2.0"/>
+        
+        <!-- Mode switching -->
+        <param name="auto_switch_modes" value="true"/>
+        <param name="hold_on_target_loss" value="false"/>
+    </node>
+    
+    <!-- Trajectory-Aware PID Controller with Hybrid Yaw -->
+    <!-- This controller automatically switches between position control and trajectory tracking -->
+    <node pkg="uav_autonomous_utils" type="control/trajectory_aware_pid_controller.py" name="trajectory_aware_pid" output="screen">
+        <!-- Distance thresholds -->
+        <param name="yaw_distance_threshold" value="60.0"/>
+        <param name="approach_distance" value="10.0"/>
+        <!-- Trajectory tracking parameters -->
+        <param name="enable_trajectory_mode" value="true"/>
+        <param name="trajectory_lookahead" value="3.0"/>  <!-- Carrot distance -->
+        <param name="trajectory_convergence_radius" value="1.0"/>
+        <param name="trajectory_feedforward_gain" value="0.8"/>
+        
+        <!-- Position control tolerances -->
+        <param name="position_tolerance" value="0.5"/>     <!-- GPS mode -->
+        <param name="trajectory_tolerance" value="1.0"/>   <!-- Path following -->
+        
+        <!-- Velocity limits -->
+        <param name="max_velocity" value="2.0"/>
+        <param name="max_yaw_rate" value="0.5"/>
+        
+        <!-- PID Gains for Position Setpoint Mode (GPS/Visual) -->
+        <rosparam param="kp_position">[0.8, 0.8, 0.6, 1.0]</rosparam>
+        <rosparam param="ki_position">[0.02, 0.02, 0.02, 0.0]</rosparam>
+        <rosparam param="kd_position">[0.15, 0.15, 0.12, 0.15]</rosparam>
+        
+        <!-- PD Gains for Trajectory Tracking Mode (no integral) -->
+        <rosparam param="kp_trajectory">[1.2, 1.2, 0.8, 1.0]</rosparam>
+        <rosparam param="kd_trajectory">[0.3, 0.3, 0.2, 0.2]</rosparam>
+        
+        <!-- Remapping for unified pipeline -->
+        <remap from="/uav/attractive_velocity" to="/uav/attractive_velocity"/>
+    </node>
+    
+    <!-- 3D APF Obstacle Avoidance -->
+    <node pkg="uav_autonomous_utils" type="navigation/apf_3d_node.py" name="apf_3d_node" output="screen">
+        <!-- Dynamic parameters based on navigation mode will be handled internally -->
+        <param name="r" value="6.5"/>              <!-- Base repulsion radius -->
+        <param name="eta_xy" value="0.8"/>         <!-- Base XY repulsion gain -->
+        <param name="eta_z" value="0.4"/>          <!-- Base Z repulsion gain -->
+        <param name="eps" value="0.3"/>            <!-- Minimum distance -->
+        <param name="max_rep_norm" value="1.0"/>   <!-- Max repulsion velocity -->
+        <param name="max_out_norm" value="2.0"/>   <!-- Max output velocity -->
+        <param name="alpha" value="0.7"/>          <!-- EMA smoothing -->
+        <param name="ignore_z" value="false"/>     <!-- 3D obstacle avoidance -->
+        <param name="max_points" value="10000"/>   <!-- Point cloud limit -->
+        
+        <!-- Topic remapping -->
+        <param name="attractive_topic" value="/uav/attractive_velocity"/>
+        <param name="pointcloud_topic" value="/iris/camera/depth/points"/>
+        <param name="output_topic" value="/mavros/setpoint_velocity/cmd_vel"/>
+    </node>
+    
+    <!-- ArUco Detection and Pose Estimation -->
+    <node pkg="uav_autonomous_utils" type="vision/aruco_pose_offset_publisher.py" name="aruco_pose_offset_publisher" output="log">
+        <param name="marker_size" value="0.6"/>
+        <param name="z_offset" value="1.2"/>       <!-- Offset for injection position -->
+        <param name="y_offset" value="0.0"/>
+        <param name="x_offset" value="0.0"/>
+        <param name="target_frame" value="odom"/>
+        <param name="enable_visualization" value="false"/>
+        <param name="output_goal_topic" value="/aruco_offset_pose"/>
+        <param name="camera_info_topic" value="/iris/camera/rgb/camera_info"/>
+        <param name="camera_rgb_topic" value="/iris/camera/rgb/image_raw"/>
+    </node>
+    
+    <!-- Transform utilities -->
+    <node pkg="uav_autonomous_utils" type="transform_utils/tf_to_pose.py" name="camera_pose_publisher" output="screen">
+        <param name="parent_frame" value="odom"/>
+        <param name="child_frame" value="iris/camera_link"/>
+        <param name="topic" value="/camera/pose"/>
+    </node>
+    
+    <node pkg="uav_autonomous_utils" type="transform_utils/map_to_odom_publisher.py" name="map_to_odom_publisher" output="screen"/>
+    
+    <!-- Static TF for camera -->
+    <node pkg="tf" type="static_transform_publisher" name="base_link_to_camera_link" 
+          args="0.1 0 0.035 -1.57 0 -1.57 base_link iris/camera_link 33"/>
+          
+    <!-- State Machine (Modified to use mode manager) -->
+    <!-- Will be updated in next step -->
+    
+</launch>

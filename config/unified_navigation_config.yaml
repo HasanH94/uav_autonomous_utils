@@ -1,0 +1,136 @@
+# Unified Navigation Configuration
+# This file contains all parameters for the dual navigation strategy
+
+# Navigation Mode Manager Settings
+navigation_mode_manager:
+  control_rate: 20.0  # Hz
+  transition_duration: 2.0  # seconds for smooth transitions
+  auto_switch_modes: true  # Automatically switch between GPS and Visual
+  hold_on_target_loss: false  # Hold position if target is lost
+
+# Yaw Control Strategy Parameters
+yaw_control:
+  # Distance thresholds for hybrid yaw control
+  distance_threshold: 60.0  # meters - beyond this, align with velocity
+  fov_distance: 15.0  # meters - within this, maintain target in FOV
+  
+  # Control gains
+  p_gain: 1.0
+  rate_limit: 0.5  # rad/s
+  
+  # Behavior modes
+  enable_hybrid: true  # Use hybrid strategy
+  velocity_align_threshold: 0.2  # min velocity (m/s) to align with
+
+# GPS Navigation Mode
+gps_mode:
+  # PID Gains for different phases
+  cruise:  # Long distance (>10m)
+    kp: [0.5, 0.5, 0.5, 0.8]  # [x, y, z, yaw]
+    ki: [0.01, 0.01, 0.01, 0.0]
+    kd: [0.1, 0.1, 0.1, 0.1]
+    max_velocity: 3.0  # m/s
+    
+  approach:  # Medium distance (3-10m)
+    kp: [0.8, 0.8, 0.6, 1.0]
+    ki: [0.02, 0.02, 0.02, 0.0]
+    kd: [0.15, 0.15, 0.12, 0.15]
+    max_velocity: 1.0  # m/s
+    
+  # APF parameters for GPS mode
+  obstacle_avoidance:
+    repulsion_radius: 6.5  # meters
+    repulsion_gain_xy: 0.8
+    repulsion_gain_z: 0.4
+    max_repulsion: 1.0  # m/s
+    
+  # Goal tolerance
+  goal_tolerance: 0.5  # meters
+  approach_distance: 10.0  # meters - switch to approach gains
+
+# Visual Servoing Mode
+visual_mode:
+  # PID Gains for precise control
+  pid:
+    kp: [1.2, 1.2, 0.8, 1.2]  # Higher gains for precision
+    ki: [0.05, 0.05, 0.03, 0.0]
+    kd: [0.2, 0.2, 0.15, 0.2]
+    max_velocity: 0.5  # m/s - slower for precision
+    
+  # APF parameters for visual mode (gentler avoidance)
+  obstacle_avoidance:
+    repulsion_radius: 3.0  # meters - smaller radius
+    repulsion_gain_xy: 0.4  # Gentler repulsion
+    repulsion_gain_z: 0.2
+    max_repulsion: 0.5  # m/s
+    
+  # Precision parameters
+  goal_tolerance: 0.2  # meters - tighter for injection
+  activation_distance: 10.0  # meters - when to switch to visual
+  confidence_threshold: 0.7  # ArUco detection confidence
+  timeout: 2.0  # seconds - fallback to GPS if lost
+
+# Velocity Profiling
+velocity_profile:
+  enable: true
+  acceleration_limit: 1.0  # m/s^2
+  deceleration_distance: 5.0  # meters
+  jerk_limit: 2.0  # m/s^3
+
+# ArUco Detection Settings
+aruco_detection:
+  marker_size: 0.6  # meters
+  injection_offset:  # Offset from marker center for injection
+    x: 0.0
+    y: 0.0
+    z: 1.2  # meters above marker
+  min_pixel_area: 400
+  max_pixel_area: 100000
+  detection_confidence_increase: 2  # per frame
+  detection_confidence_decrease: 1  # per frame
+  confidence_threshold: 20  # frames
+
+# Search Pattern (when target lost)
+search_pattern:
+  type: "expanding_spiral"  # or "grid", "hover"
+  spiral_radius_increment: 2.0  # meters
+  max_search_radius: 20.0  # meters
+  search_velocity: 1.0  # m/s
+  search_altitude: 5.0  # meters above last known position
+
+# Safety Parameters
+safety:
+  min_altitude: 1.0  # meters
+  max_altitude: 50.0  # meters
+  geofence_radius: 100.0  # meters from home
+  emergency_land_battery: 20  # percent
+  rtl_battery: 30  # percent
+  max_tilt_angle: 30  # degrees
+  
+# Vegetation Environment Tuning
+vegetation_mode:
+  enable_adaptive_apf: true
+  # APF adjustments for vegetation
+  vegetation_detection_height: 3.0  # meters - assumed vegetation height
+  vegetation_repulsion_boost: 1.5  # multiplier for vegetation obstacles
+  use_directional_repulsion: true  # Stronger repulsion in direction of motion
+  
+# Communication Topics
+topics:
+  # Input topics
+  mission_goal: "/move_base_mission"
+  visual_goal: "/aruco_offset_pose"
+  odometry: "/mavros/local_position/odom"
+  pointcloud: "/iris/camera/depth/points"
+  
+  # Output topics
+  velocity_command: "/mavros/setpoint_velocity/cmd_vel"
+  active_goal: "/navigation/active_goal"
+  mode_status: "/navigation/current_mode"
+  
+# Debug and Logging
+debug:
+  enable_visualization: true
+  log_level: "INFO"  # DEBUG, INFO, WARN, ERROR
+  record_trajectory: true
+  trajectory_file: "/tmp/drone_trajectory.csv"
