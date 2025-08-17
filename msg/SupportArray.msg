@@ -1,2 +1,2 @@
 std_msgs/Header header
-cbf_local_planner/SupportPoint[] supports
+uav_autonomous_utils/SupportPoint[] supports
