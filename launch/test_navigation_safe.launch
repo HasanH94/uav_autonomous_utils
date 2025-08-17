@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- Safe Testing Launch File - Start components one by one -->
+    
+    <arg name="test_mode" default="basic"/>  <!-- basic, with_state_machine, full -->
+    
+    <!-- Stage 1: Basic Components (always start these) -->
+    <group if="$(eval arg('test_mode') in ['basic', 'with_state_machine', 'full'])">
+        
+        <!-- Navigation Mode Manager -->
+        <node pkg="uav_autonomous_utils" type="control/navigation_mode_manager.py" 
+              name="navigation_mode_manager" output="screen">
+            <param name="yaw_distance_threshold" value="60.0"/>
+            <param name="yaw_injection_distance" value="3.0"/>
+            <param name="visual_activation_distance" value="10.0"/>
+        </node>
+        
+        <!-- Trajectory-Aware PID (without APF first) -->
+        <node pkg="uav_autonomous_utils" type="control/trajectory_aware_pid_controller.py" 
+              name="trajectory_aware_pid" output="screen">
+            <param name="enable_trajectory_mode" value="true"/>
+            <param name="priority_mode" value="auto"/>
+            <rosparam param="kp_position">[0.5, 0.5, 0.5, 0.8]</rosparam>
+            
+            <!-- Output to test topic first, not directly to mavros -->
+            <remap from="/uav/attractive_velocity" to="/test/attractive_velocity"/>
+        </node>
+        
+    </group>
+    
+    <!-- Stage 2: Add State Machine -->
+    <group if="$(eval arg('test_mode') in ['with_state_machine', 'full'])">
+        
+        <node pkg="uav_autonomous_utils" type="state_machine/enhanced_drone_state_machine.py" 
+              name="drone_state_machine" output="screen">
+            <rosparam param="goal_points">[[5.0, 0.0, 2.0], [10.0, 5.0, 3.0]]</rosparam>
+            <rosparam param="home_position">[0.0, 0.0, 2.0]</rosparam>
+            <param name="aruco_detection_window_size" value="30"/>
+            <param name="aruco_detection_threshold" value="0.7"/>
+            <param name="gps_goal_tolerance" value="1.0"/>
+        </node>
+        
+    </group>
+    
+    <!-- Stage 3: Full System with APF -->
+    <group if="$(eval arg('test_mode') == 'full')">
+        
+        <!-- APF Obstacle Avoidance -->
+        <node pkg="uav_autonomous_utils" type="navigation/apf_3d_node.py" 
+              name="apf_3d_node" output="screen">
+            <param name="r" value="6.5"/>
+            <param name="eta_xy" value="0.8"/>
+            <param name="eta_z" value="0.4"/>
+            
+            <!-- Remap for testing -->
+            <remap from="/uav/attractive_velocity" to="/test/attractive_velocity"/>
+            <remap from="/iris/camera/depth/points" to="/test/pointcloud"/>
+            <remap from="/mavros/setpoint_velocity/cmd_vel" to="/test/final_velocity"/>
+        </node>
+        
+    </group>
+    
+    <!-- Test Monitoring Tools -->
+    <node pkg="rqt_graph" type="rqt_graph" name="rqt_graph"/>
+    
+</launch>
