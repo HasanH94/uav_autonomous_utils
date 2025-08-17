@@ -9,6 +9,11 @@ from trajectory_msgs.msg import MultiDOFJointTrajectory, MultiDOFJointTrajectory
 from std_msgs.msg import String, Float32
 from tf.transformations import euler_from_quaternion
 
+class YawControlMode(Enum):
+    VELOCITY_ALIGNED = "velocity_aligned"  # Face direction of motion
+    TARGET_LOCKED = "target_locked"        # Face the target
+    HYBRID = "hybrid"                       # Smart switching based on distance
+
 class ControlMode(Enum):
     POSITION_SETPOINT = "position_setpoint"  # Single goal position
     TRAJECTORY_TRACKING = "trajectory_tracking"  # Follow a path
@@ -45,6 +50,8 @@ class TrajectoryAwarePIDController:
         self.current_vel = np.zeros(3)
         self.current_yaw = 0.0
         self.navigation_mode = "gps_tracking"  # Initialize navigation mode
+        self.target_distance = float('inf')
+        self.yaw_control_mode = None
         
         # Position setpoint mode variables
         self.target_pos = np.zeros(3)
@@ -68,7 +75,7 @@ class TrajectoryAwarePIDController:
         self.setup_publishers()
         self.setup_subscribers()
         
-        self.rate = rospy.Rate(20.0)
+        self.rate = rospy.Rate(self.control_frequency)
         rospy.loginfo("Trajectory-Aware PID Controller initialized")
         
     def load_parameters(self):
@@ -76,6 +83,9 @@ class TrajectoryAwarePIDController:
         self.priority_mode = rospy.get_param('~priority_mode', 'auto')  # 'auto', 'manual', 'navigation_mode'
         self.input_timeout = rospy.get_param('~input_timeout', 2.0)  # seconds
         self.allow_override = rospy.get_param('~allow_override', True)
+
+        # Loop Rate
+        self.control_frequency = rospy.get_param('~control_frequency', 20.0)
         
         # Control modes parameters
         self.enable_trajectory_mode = rospy.get_param('~enable_trajectory_mode', True)
@@ -89,6 +99,7 @@ class TrajectoryAwarePIDController:
         
         # Trajectory tracking gains (typically different from position control)
         self.kp_trajectory = np.array(rospy.get_param('~kp_trajectory', [1.2, 1.2, 0.8, 1.0]))
+        self.ki_trajectory = np.array(rospy.get_param('~ki_trajectory', [0.0, 0.0, 0.0, 0.0])) # New Integral gains
         self.kd_trajectory = np.array(rospy.get_param('~kd_trajectory', [0.3, 0.3, 0.2, 0.2]))
         self.trajectory_feedforward_gain = rospy.get_param('~trajectory_feedforward_gain', 0.8)
         
@@ -99,6 +110,10 @@ class TrajectoryAwarePIDController:
         # Goal tolerances
         self.position_tolerance = rospy.get_param('~position_tolerance', 0.5)
         self.trajectory_tolerance = rospy.get_param('~trajectory_tolerance', 1.0)
+
+        # Hybrid Yaw Parameters (moved from navigation_mode_manager)
+        self.yaw_distance_threshold = rospy.get_param('~yaw_distance_threshold', 60.0)
+        self.yaw_injection_distance = rospy.get_param('~yaw_injection_distance', 3.0)
         
     def setup_publishers(self):
         self.vel_pub = rospy.Publisher('/uav/attractive_velocity', TwistStamped, queue_size=10)
@@ -126,6 +141,7 @@ class TrajectoryAwarePIDController:
         
         # Navigation mode from mode manager
         rospy.Subscriber('/navigation/current_mode', String, self.navigation_mode_callback)
+        rospy.Subscriber('/navigation/target_distance', Float32, self.distance_callback) # For hybrid yaw
         
     def odom_callback(self, msg):
         self.current_pos[0] = msg.pose.pose.position.x
@@ -142,6 +158,42 @@ class TrajectoryAwarePIDController:
     def navigation_mode_callback(self, msg):
         """Track navigation mode from mode manager"""
         self.navigation_mode = msg.data
+
+    def distance_callback(self, msg):
+        self.target_distance = msg.data
+
+    def calculate_hybrid_yaw(self):
+        # Implements the hybrid yaw control strategy
+        if not self.gps_target:
+            return 0.0
+
+        desired_yaw = self.target_yaw # Default to the final desired yaw
+
+        if self.target_distance > self.yaw_distance_threshold:
+            # Far away - align with velocity
+            if np.linalg.norm(self.current_vel[:2]) > 0.1:
+                desired_yaw = math.atan2(self.current_vel[1], self.current_vel[0])
+                self.yaw_control_mode = YawControlMode.VELOCITY_ALIGNED
+        elif self.target_distance < self.yaw_injection_distance:
+            # Very close - use the final orientation from the goal
+            desired_yaw = self.target_yaw
+            self.yaw_control_mode = YawControlMode.TARGET_LOCKED
+        else:
+            # Medium distance - face toward the target
+            pos_error = self.target_pos - self.current_pos
+            desired_yaw = math.atan2(pos_error[1], pos_error[0])
+            self.yaw_control_mode = YawControlMode.TARGET_LOCKED
+
+        # Calculate yaw error
+        yaw_error = desired_yaw - self.current_yaw
+        while yaw_error > math.pi:
+            yaw_error -= 2 * math.pi
+        while yaw_error < -math.pi:
+            yaw_error += 2 * math.pi
+
+        # Apply P-control to get yaw rate
+        # yaw_rate = self.yaw_p_gain * yaw_error
+        return desired_yaw
         
     def should_accept_input(self, new_priority):
         """Determine if new input should override current control"""
@@ -323,13 +375,13 @@ class TrajectoryAwarePIDController:
         # Return last point if we're near the end
         return self.trajectory_poses[-1] if self.trajectory_poses else None
         
-    def compute_trajectory_tracking_control(self):
+    def compute_trajectory_tracking_control(self, dt):
         """Compute control for trajectory tracking mode"""
         carrot_point = self.find_carrot_point()
         
         if not carrot_point:
             rospy.logwarn("No carrot point found")
-            return self.compute_position_control()  # Fallback
+            return self.compute_position_control(dt)  # Fallback
             
         # Publish carrot for visualization
         self.carrot_pub.publish(carrot_point)
@@ -358,18 +410,22 @@ class TrajectoryAwarePIDController:
         tracking_error = np.linalg.norm(pos_error)
         self.tracking_error_pub.publish(Float32(tracking_error))
         
-        # PD control for trajectory (no integral for trajectory tracking)
+        # Full PID control for trajectory
         error = np.array([pos_error[0], pos_error[1], pos_error[2], yaw_error])
         
-        # Calculate derivative
-        dt = 0.05  # Assuming 20Hz
+        # Calculate derivative and integral
+        self.integral += error * dt
+        self.integral = np.clip(self.integral, -2.0, 2.0)  # Anti-windup
+
         if np.any(self.previous_error):
             derivative = (error - self.previous_error) / dt
         else:
             derivative = np.zeros(4)
             
-        # PD control with trajectory-specific gains
-        output = self.kp_trajectory * error + self.kd_trajectory * derivative
+        # PID control with trajectory-specific gains
+        output = (self.kp_trajectory * error + 
+                  self.ki_trajectory * self.integral + 
+                  self.kd_trajectory * derivative)
         
         # Add feedforward if we have velocity information
         if hasattr(self, 'trajectory') and self.trajectory:
@@ -387,12 +443,13 @@ class TrajectoryAwarePIDController:
         
         return output
         
-    def compute_position_control(self):
+    def compute_position_control(self, dt):
         """Compute control for position setpoint mode (existing PID)"""
         pos_error = self.target_pos - self.current_pos
         
-        # Desired yaw (can be exact orientation or pointing toward target)
-        yaw_error = self.target_yaw - self.current_yaw
+        # Get desired yaw from our hybrid logic
+        desired_yaw = self.calculate_hybrid_yaw()
+        yaw_error = desired_yaw - self.current_yaw
         
         # Normalize yaw error
         while yaw_error > math.pi:
@@ -403,7 +460,6 @@ class TrajectoryAwarePIDController:
         # Full PID control
         error = np.array([pos_error[0], pos_error[1], pos_error[2], yaw_error])
         
-        dt = 0.05
         self.integral += error * dt
         self.integral = np.clip(self.integral, -2.0, 2.0)  # Anti-windup
         
@@ -422,11 +478,20 @@ class TrajectoryAwarePIDController:
         
     def run(self):
         while not rospy.is_shutdown():
+            # Calculate dt dynamically
+            current_time = rospy.Time.now()
+            dt = (current_time - self.last_time).to_sec()
+            self.last_time = current_time
+
+            if dt <= 0:
+                self.rate.sleep()
+                continue
+
             # Compute control based on mode
             if self.control_mode == ControlMode.POSITION_SETPOINT:
-                output = self.compute_position_control()
+                output = self.compute_position_control(dt)
             elif self.control_mode == ControlMode.TRAJECTORY_TRACKING:
-                output = self.compute_trajectory_tracking_control()
+                output = self.compute_trajectory_tracking_control(dt)
             elif self.control_mode == ControlMode.VELOCITY_DIRECT:
                 # Direct velocity mode handled in callback
                 self.rate.sleep()

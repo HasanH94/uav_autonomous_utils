@@ -18,11 +18,6 @@ class NavigationMode(Enum):
     HOLD = "hold"
     TRANSITION = "transition"
 
-class YawControlMode(Enum):
-    VELOCITY_ALIGNED = "velocity_aligned"  # Face direction of motion
-    TARGET_LOCKED = "target_locked"        # Face the target
-    HYBRID = "hybrid"                       # Smart switching based on distance
-
 class NavigationModeManager:
     def __init__(self):
         rospy.init_node('navigation_mode_manager')
@@ -33,7 +28,6 @@ class NavigationModeManager:
         # State variables
         self.current_mode = NavigationMode.HOLD
         self.previous_mode = NavigationMode.HOLD
-        self.yaw_control_mode = YawControlMode.HYBRID
         self.transition_progress = 0.0
         self.transition_start_time = None
         
@@ -73,13 +67,6 @@ class NavigationModeManager:
         self.control_rate = rospy.get_param('~control_rate', 20.0)
         self.transition_duration = rospy.get_param('~transition_duration', 2.0)
         
-        # Yaw control parameters
-        self.yaw_distance_threshold = rospy.get_param('~yaw_distance_threshold', 60.0)  # 60m as you specified
-        self.yaw_fov_distance = rospy.get_param('~yaw_fov_distance', 15.0)  # Distance where we start considering FOV
-        self.yaw_injection_distance = rospy.get_param('~yaw_injection_distance', 3.0)  # Distance for exact orientation matching
-        self.yaw_rate_limit = rospy.get_param('~yaw_rate_limit', 0.5)  # rad/s
-        self.yaw_p_gain = rospy.get_param('~yaw_p_gain', 1.0)
-        
         # Visual servoing parameters
         self.visual_activation_distance = rospy.get_param('~visual_activation_distance', 10.0)
         self.visual_confidence_threshold = rospy.get_param('~visual_confidence_threshold', 0.7)
@@ -92,12 +79,10 @@ class NavigationModeManager:
     def setup_publishers(self):
         # Mode and status publishers
         self.mode_pub = rospy.Publisher('/navigation/current_mode', String, queue_size=1)
-        self.yaw_mode_pub = rospy.Publisher('/navigation/yaw_mode', String, queue_size=1)
         self.target_distance_pub = rospy.Publisher('/navigation/target_distance', Float32, queue_size=1)
         
         # Control output publishers
         self.goal_output_pub = rospy.Publisher('/navigation/active_goal', PoseStamped, queue_size=10)
-        self.cmd_mode_pub = rospy.Publisher('/navigation/cmd_mode', String, queue_size=1)
         
         # Remapped goal publishers for different controllers
         self.gps_goal_pub = rospy.Publisher('/move_base_gps', PoseStamped, queue_size=10)
@@ -151,71 +136,6 @@ class NavigationModeManager:
         
         self.target_distance = math.sqrt(dx*dx + dy*dy + dz*dz)
         self.target_distance_pub.publish(Float32(self.target_distance))
-        
-    def calculate_hybrid_yaw(self):
-        """
-        Implements the hybrid yaw control strategy:
-        - If distance > 60m: align with velocity
-        - If 15m < distance < 60m: face toward target (FOV-aware)
-        - If distance < 3m AND visual mode: match exact target orientation from vision
-        """
-        if not self.current_pose or not self.active_target:
-            return 0.0
-            
-        # Get current yaw
-        q = self.current_pose.orientation
-        _, _, current_yaw = euler_from_quaternion([q.x, q.y, q.z, q.w])
-        
-        desired_yaw = current_yaw  # Default: maintain current
-        
-        if self.target_distance > self.yaw_distance_threshold:
-            # Too far - align with velocity direction
-            if self.current_velocity and (abs(self.current_velocity.linear.x) > 0.1 or 
-                                         abs(self.current_velocity.linear.y) > 0.1):
-                desired_yaw = math.atan2(self.current_velocity.linear.y, 
-                                        self.current_velocity.linear.x)
-                rospy.loginfo_throttle(2.0, f"Yaw Mode: VELOCITY_ALIGNED (dist: {self.target_distance:.1f}m)")
-                self.yaw_control_mode = YawControlMode.VELOCITY_ALIGNED
-                
-        elif (self.target_distance < self.yaw_injection_distance and 
-              self.current_mode == NavigationMode.VISUAL_SERVOING and
-              self.visual_target is not None):
-            # Very close AND in visual mode - use exact orientation from vision system
-            # This orientation is computed by the vision system for proper nest injection
-            tq = self.visual_target.pose.orientation
-            _, _, target_yaw = euler_from_quaternion([tq.x, tq.y, tq.z, tq.w])
-            
-            desired_yaw = target_yaw
-            rospy.loginfo_throttle(2.0, f"Yaw Mode: EXACT_ORIENTATION (dist: {self.target_distance:.1f}m, yaw: {math.degrees(target_yaw):.1f}°)")
-            self.yaw_control_mode = YawControlMode.TARGET_LOCKED
-                
-        else:
-            # Medium distance - face toward the target to keep it in FOV
-            dx = self.active_target.pose.position.x - self.current_pose.position.x
-            dy = self.active_target.pose.position.y - self.current_pose.position.y
-            
-            desired_yaw = math.atan2(dy, dx)
-            
-            if self.target_distance < self.yaw_fov_distance:
-                rospy.loginfo_throttle(2.0, f"Yaw Mode: TARGET_FACING_FOV (dist: {self.target_distance:.1f}m)")
-            else:
-                rospy.loginfo_throttle(2.0, f"Yaw Mode: TARGET_FACING (dist: {self.target_distance:.1f}m)")
-            self.yaw_control_mode = YawControlMode.TARGET_LOCKED
-            
-        # Calculate yaw error and apply P control
-        yaw_error = desired_yaw - current_yaw
-        
-        # Normalize to [-pi, pi]
-        while yaw_error > math.pi:
-            yaw_error -= 2 * math.pi
-        while yaw_error < -math.pi:
-            yaw_error += 2 * math.pi
-            
-        # Apply proportional control with rate limiting
-        yaw_rate = self.yaw_p_gain * yaw_error
-        yaw_rate = np.clip(yaw_rate, -self.yaw_rate_limit, self.yaw_rate_limit)
-        
-        return yaw_rate
         
     def switch_mode(self, new_mode):
         if new_mode == self.current_mode:
@@ -285,30 +205,20 @@ class NavigationModeManager:
         else:
             self.active_target = None
             
-        # Publish active goal with hybrid yaw control
+        # Publish active goal
         if self.active_target:
-            # Create modified goal with yaw rate
-            goal_with_yaw = PoseStamped()
-            goal_with_yaw.header = self.active_target.header
-            goal_with_yaw.header.stamp = rospy.Time.now()
-            goal_with_yaw.pose = self.active_target.pose
-            
-            # Calculate and embed yaw rate in orientation (custom encoding)
-            # Note: The PID controller will need to be modified to extract this
-            yaw_rate = self.calculate_hybrid_yaw()
-            
-            # Publish to appropriate topic based on mode
+            # The manager now simply forwards the active target to the appropriate topic.
+            # The PID controller handles all yaw logic.
             if self.current_mode == NavigationMode.GPS_TRACKING:
-                self.gps_goal_pub.publish(goal_with_yaw)
+                self.gps_goal_pub.publish(self.active_target)
             elif self.current_mode == NavigationMode.VISUAL_SERVOING:
-                self.visual_goal_pub.publish(goal_with_yaw)
+                self.visual_goal_pub.publish(self.active_target)
                 
-            # Also publish to general output
-            self.goal_output_pub.publish(goal_with_yaw)
+            # Also publish to general output for monitoring
+            self.goal_output_pub.publish(self.active_target)
             
         # Publish current states
         self.mode_pub.publish(String(self.current_mode.value))
-        self.yaw_mode_pub.publish(String(self.yaw_control_mode.value))
         
     def handle_transition(self):
         """Handle smooth transition between modes"""

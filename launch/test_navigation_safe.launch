@@ -11,9 +11,7 @@
         <!-- Navigation Mode Manager -->
         <node pkg="uav_autonomous_utils" type="navigation_mode_manager.py" 
               name="navigation_mode_manager" output="screen">
-            <param name="yaw_distance_threshold" value="60.0"/>
-            <param name="yaw_injection_distance" value="3.0"/>
-            <param name="visual_activation_distance" value="10.0"/>
+            <param name="visual_activation_distance" value="20.0"/>
         </node>
         
         <!-- Trajectory-Aware PID (without APF first) -->
@@ -22,7 +20,21 @@
             <param name="enable_trajectory_mode" value="true"/>
             <param name="priority_mode" value="auto"/>
             <rosparam param="kp_position">[0.5, 0.5, 0.5, 0.8]</rosparam>
+            <rosparam param="ki_position">[0.02, 0.02, 0.02, 0.0]</rosparam>
+            <rosparam param="kd_position">[0.15, 0.15, 0.12, 0.15]</rosparam>
+
+            <!-- Gains for Trajectory Tracking Mode (PD Controller) -->
+            <rosparam param="kp_trajectory">[1.2, 1.2, 0.8, 1.0]</rosparam>
+            <rosparam param="kd_trajectory">[0.3, 0.3, 0.2, 0.2]</rosparam>
+            <rosparam param="ki_trajectory">[0.0, 0.0, 0.0, 0.0]</rosparam>
+
             <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/>
+            
+            <!-- Yaw Parameters -->
+            <param name="yaw_distance_threshold" value="60.0"/>
+            <param name="yaw_injection_distance" value="1.5"/>
+            <param name="max_yaw_rate" value="0.5"/>
+            <param name="control_frequency" value="20.0"/>
             
             <!-- Output to test topic first, not directly to mavros -->
             <!-- <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/> -->
