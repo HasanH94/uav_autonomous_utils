@@ -45,6 +45,7 @@ class EnhancedDroneStateMachine(Machine):
         
         self.visual_activation_distance = rospy.get_param('~visual_activation_distance', 10.0)
         self.gps_goal_tolerance = rospy.get_param('~gps_goal_tolerance', 1.0)  # Consider reached if within 1m
+        self.visual_gps_tolerance = rospy.get_param('~visual_gps_tolerance', 3.0) # Must be near GPS goal to activate visual
         self.search_timeout = rospy.get_param('~search_timeout', 30.0)
         
         # State tracking
@@ -107,7 +108,7 @@ class EnhancedDroneStateMachine(Machine):
             trigger='visual_target_acquired',
             source='gps_navigation',
             dest='visual_servoing',
-            conditions=['is_aruco_detected_confident', 'is_within_visual_range']
+            conditions=['is_aruco_detected_confident', 'is_within_visual_range', 'is_near_gps_goal']
         )
         
         # GPS goal reached (within 1m) but no ArUco - start searching
@@ -182,6 +183,18 @@ class EnhancedDroneStateMachine(Machine):
         
     def is_last_goal(self, event=None):
         return self.current_mission_goal_index >= len(self.goal_points) - 1
+
+    def is_near_gps_goal(self, event=None):
+        if not self.current_pose or self.current_mission_goal_index >= len(self.goal_points):
+            return False
+        
+        goal_coords = self.goal_points[self.current_mission_goal_index]
+        dx = goal_coords[0] - self.current_pose.pose.position.x
+        dy = goal_coords[1] - self.current_pose.pose.position.y
+        dz = goal_coords[2] - self.current_pose.pose.position.z
+        
+        distance = math.sqrt(dx*dx + dy*dy + dz*dz)
+        return distance <= self.visual_gps_tolerance
         
     # Callbacks
     def nav_mode_callback(self, msg):

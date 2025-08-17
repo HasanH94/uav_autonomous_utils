@@ -78,11 +78,11 @@
     <!-- Load the URDF model into the /robot_description parameter -->
     <param name="robot_description" command="$(find xacro)/xacro $(find uav_autonomous_utils)/models/iris_drone.urdf --inorder" />
 
-    <node pkg="uav_autonomous_utils" type="tf_to_pose.py" name="camera_pose_publisher" output="screen">
+    <!-- <node pkg="uav_autonomous_utils" type="tf_to_pose.py" name="camera_pose_publisher" output="screen">
         <param name="parent_frame" value="odom"/>
         <param name="child_frame" value="iris/camera_link"/>
         <param name="topic" value="/camera/pose"/>
-    </node>
+    </node> -->
 
     <node pkg="uav_autonomous_utils" type="map_to_odom_publisher.py" name="map_to_odom_publisher" output="screen"/>
 

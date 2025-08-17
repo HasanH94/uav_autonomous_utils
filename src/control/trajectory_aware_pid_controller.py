@@ -114,6 +114,9 @@ class TrajectoryAwarePIDController:
         # Hybrid Yaw Parameters (moved from navigation_mode_manager)
         self.yaw_distance_threshold = rospy.get_param('~yaw_distance_threshold', 60.0)
         self.yaw_injection_distance = rospy.get_param('~yaw_injection_distance', 3.0)
+
+        # Search Parameters
+        self.search_yaw_rate = rospy.get_param('~search_yaw_rate', 0.2)
         
     def setup_publishers(self):
         self.vel_pub = rospy.Publisher('/uav/attractive_velocity', TwistStamped, queue_size=10)
@@ -478,7 +481,27 @@ class TrajectoryAwarePIDController:
         
     def run(self):
         while not rospy.is_shutdown():
-            # Calculate dt dynamically
+            # Check for highest-priority override first
+            if self.control_mode == ControlMode.VELOCITY_DIRECT:
+                # Emergency command is published directly from its callback.
+                # This loop should wait to prevent publishing conflicting commands.
+                self.rate.sleep()
+                continue
+
+            # If in search mode, override all other logic and just rotate.
+            if self.navigation_mode == 'search':
+                vel_msg = TwistStamped()
+                vel_msg.header.stamp = rospy.Time.now()
+                vel_msg.header.frame_id = "odom"
+                vel_msg.twist.linear.x = 0
+                vel_msg.twist.linear.y = 0
+                vel_msg.twist.linear.z = 0
+                vel_msg.twist.angular.z = self.search_yaw_rate
+                self.vel_pub.publish(vel_msg)
+                self.rate.sleep()
+                continue
+
+            # Calculate dt dynamically for PID controllers
             current_time = rospy.Time.now()
             dt = (current_time - self.last_time).to_sec()
             self.last_time = current_time
@@ -508,7 +531,7 @@ class TrajectoryAwarePIDController:
             if vel_norm > self.max_velocity:
                 linear_vel = (linear_vel / vel_norm) * self.max_velocity
                 
-            yaw_rate = np.clip(yaw_rate, -self.max_yaw_rate, self.max_yaw_rate)
+            # yaw_rate = np.clip(yaw_rate, -self.max_yaw_rate, self.max_yaw_rate)
             
             # DEBUGGING: Log the output before publishing
             rospy.loginfo(f"[PID DEBUG] Output Vel: linear=[{linear_vel[0]:.2f}, {linear_vel[1]:.2f}, {linear_vel[2]:.2f}], angular_z=[{yaw_rate:.2f}]")

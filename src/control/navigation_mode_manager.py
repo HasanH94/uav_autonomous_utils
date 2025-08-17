@@ -177,12 +177,12 @@ class NavigationModeManager:
             rospy.loginfo("Auto-switching to VISUAL_SERVOING mode")
             self.switch_mode(NavigationMode.VISUAL_SERVOING)
             
-        # Check for fallback to GPS
+        # Check for fallback to SEARCH
         elif (self.current_mode == NavigationMode.VISUAL_SERVOING and
               (rospy.Time.now() - self.last_aruco_time).to_sec() > self.aruco_timeout):
-            
-            rospy.loginfo("Lost visual target, switching back to GPS_TRACKING")
-            self.switch_mode(NavigationMode.GPS_TRACKING)
+
+            rospy.loginfo("Lost visual target, switching to SEARCH mode")
+            self.switch_mode(NavigationMode.SEARCH)
             
     def control_callback(self, event):
         """Main control loop"""

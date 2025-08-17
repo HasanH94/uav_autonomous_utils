@@ -9,9 +9,10 @@
     <group if="$(eval arg('test_mode') in ['basic', 'with_state_machine', 'full'])">
         
         <!-- Navigation Mode Manager -->
-        <node pkg="uav_autonomous_utils" type="navigation_mode_manager.py" 
+        <node pkg="uav_autonomous_utils" type="navigation_mode_manager.py"
               name="navigation_mode_manager" output="screen">
             <param name="visual_activation_distance" value="20.0"/>
+            <remap from="/aruco_offset_pose" to="/move_base_visual"/>
         </node>
         
         <!-- Trajectory-Aware PID (without APF first) -->
@@ -19,8 +20,8 @@
               name="trajectory_aware_pid" output="screen">
             <param name="enable_trajectory_mode" value="true"/>
             <param name="priority_mode" value="auto"/>
-            <rosparam param="kp_position">[0.5, 0.5, 0.5, 0.8]</rosparam>
-            <rosparam param="ki_position">[0.02, 0.02, 0.02, 0.0]</rosparam>
+            <rosparam param="kp_position">[0.5, 0.5, 2.5, 0.8]</rosparam>
+            <rosparam param="ki_position">[0.02, 0.02, 0.02, 0.01]</rosparam>
             <rosparam param="kd_position">[0.15, 0.15, 0.12, 0.15]</rosparam>
 
             <!-- Gains for Trajectory Tracking Mode (PD Controller) -->
@@ -28,13 +29,14 @@
             <rosparam param="kd_trajectory">[0.3, 0.3, 0.2, 0.2]</rosparam>
             <rosparam param="ki_trajectory">[0.0, 0.0, 0.0, 0.0]</rosparam>
 
-            <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/>
+            <!-- <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/> -->
             
             <!-- Yaw Parameters -->
             <param name="yaw_distance_threshold" value="60.0"/>
             <param name="yaw_injection_distance" value="1.5"/>
-            <param name="max_yaw_rate" value="0.5"/>
+            <param name="max_yaw_rate" value="1.5"/>
             <param name="control_frequency" value="20.0"/>
+            <param name="search_yaw_rate" value="0.2"/>
             
             <!-- Output to test topic first, not directly to mavros -->
             <!-- <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/> -->
@@ -63,14 +65,15 @@
         <node pkg="uav_autonomous_utils" type="apf_3d_node.py" 
               name="apf_3d_node" output="screen">
             <param name="r" value="6.5" />
-            <param name="eta_xy" value="0.4" />   <!-- repulsion_gain for XY -->
-            <param name="eta_z" value="0.2" />   <!-- repulsion_gain for Z -->
+            <param name="eta_xy" value="0.01" />   <!-- repulsion_gain for XY -->
+            <param name="eta_z" value="0.002" />   <!-- repulsion_gain for Z -->
             <param name="eps" value="0.3" />  <!-- minimum_distance -->
             <param name="max_rep_norm" value="60.0" />
-            <param name="max_out_norm" value="2.5" />
+            <param name="max_out_norm" value="1.5" />
             <param name="alpha" value="0.75" /> <!-- exp moving average for the repulsion -->
             <param name="ignore_z" value="false" />
             <param name="max_points" value="10000" />
+            <param name="search_yaw_rate" value="0.3" />
             <param name="attractive_topic" value="/uav/attractive_velocity" />
             <param name="pointcloud_topic" value="/iris/camera/depth/points" />
             <!-- <param name="output_topic" value="/cmd_corrected" /> -->
