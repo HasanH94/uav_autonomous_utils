@@ -8,12 +8,12 @@
     <!-- Stage 1: Basic Components (always start these) -->
     <group if="$(eval arg('test_mode') in ['basic', 'with_state_machine', 'full'])">
         
-        <!-- Navigation Mode Manager -->
-        <node pkg="uav_autonomous_utils" type="navigation_mode_manager.py"
+        <!-- Navigation Mode Manager - DISABLED: Functionality merged into enhanced_drone_state_machine.py -->
+        <!-- <node pkg="uav_autonomous_utils" type="navigation_mode_manager.py"
               name="navigation_mode_manager" output="screen">
             <param name="visual_activation_distance" value="20.0"/>
             <remap from="/aruco_offset_pose" to="/move_base_visual"/>
-        </node>
+        </node> -->
         
         <!-- Trajectory-Aware PID (without APF first) -->
         <node pkg="uav_autonomous_utils" type="trajectory_aware_pid_controller.py" 

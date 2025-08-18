@@ -7,7 +7,6 @@ from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool, String, Float32
 from mavros_msgs.srv import SetMode, SetModeRequest, CommandBool
 from mavros_msgs.msg import State
-from uav_autonomous_utils.srv import SetNavigationMode, SetNavigationModeRequest
 from tf.transformations import euler_from_quaternion
 
 class EnhancedDroneStateMachine(Machine):
@@ -61,12 +60,15 @@ class EnhancedDroneStateMachine(Machine):
         self.visual_target_pose = None # Store visual target pose
         self.mavros_state = State()  # Initialize state
         
-        # Services
-        rospy.wait_for_service('/navigation/set_mode')
+        # Goal management (from navigation_mode_manager)
+        self.gps_target = None
+        self.visual_target = None
+        self.active_target = None
+        
+        # Services (removed navigation/set_mode since we're the authority now)
         rospy.wait_for_service('/mavros/set_mode')
         rospy.wait_for_service('/mavros/cmd/arming')
         
-        self.nav_mode_client = rospy.ServiceProxy('/navigation/set_mode', SetNavigationMode)
         self.mavros_mode_client = rospy.ServiceProxy('/mavros/set_mode', SetMode)
         self.arming_client = rospy.ServiceProxy('/mavros/cmd/arming', CommandBool)
 
@@ -77,6 +79,12 @@ class EnhancedDroneStateMachine(Machine):
         self.mission_goal_pub = rospy.Publisher('/move_base_mission', PoseStamped, queue_size=10)
         self.state_pub = rospy.Publisher('/state_machine/current_state', String, queue_size=1)
         
+        # Navigation mode and goal publishers (replacing navigation_mode_manager)
+        self.mode_pub = rospy.Publisher('/navigation/current_mode', String, queue_size=1)
+        self.target_distance_pub = rospy.Publisher('/navigation/target_distance', Float32, queue_size=1)
+        self.gps_goal_pub = rospy.Publisher('/move_base_gps', PoseStamped, queue_size=10)
+        self.visual_goal_pub = rospy.Publisher('/move_base_visual', PoseStamped, queue_size=10)
+        
         # Subscribers
         self.setup_subscribers()
         
@@ -86,12 +94,9 @@ class EnhancedDroneStateMachine(Machine):
         rospy.loginfo("Enhanced Drone State Machine initialized")
         
     def setup_subscribers(self):
-        # Navigation feedback
-        rospy.Subscriber('/navigation/current_mode', String, self.nav_mode_callback)
-        rospy.Subscriber('/navigation/target_distance', Float32, self.distance_callback)
-        
-        # ArUco detection
+        # ArUco detection and visual target
         rospy.Subscriber('/aruco_detection_status', Bool, self.aruco_status_callback)
+        rospy.Subscriber('/aruco_offset_pose', PoseStamped, self.visual_goal_callback)
         
         # Event triggers
         # rospy.Subscriber('/drone_events/reached_goal_point', Bool, self.goal_reached_callback) # Removed, now handled internally
@@ -100,7 +105,6 @@ class EnhancedDroneStateMachine(Machine):
         # MAVROS state
         rospy.Subscriber('/mavros/state', State, self.mavros_state_callback)
         rospy.Subscriber('/mavros/local_position/pose', PoseStamped, self.pose_callback)
-        rospy.Subscriber('/move_base_visual', PoseStamped, self.visual_target_callback) # New subscription for visual target
         
     def setup_transitions(self):
         # From idle
@@ -258,34 +262,40 @@ class EnhancedDroneStateMachine(Machine):
         return False
 
     # Callbacks
-    def nav_mode_callback(self, msg):
-        prev_mode = self.navigation_mode
-        self.navigation_mode = msg.data
+    def visual_goal_callback(self, msg):
+        """Handle visual target from ArUco detection"""
+        self.visual_target = msg
+        self.visual_target_pose = msg  # Keep for compatibility
         
-        if prev_mode != self.navigation_mode:
-            rospy.loginfo(f"Navigation mode changed: {prev_mode} -> {self.navigation_mode}, State Machine state: {self.state}")
-        
-        # Auto-trigger state transitions based on nav mode changes
-        if self.navigation_mode == "visual_servoing" and self.state == "gps_navigation":
-            # Check all conditions before triggering
-            if self.is_aruco_detected_confident() and self.is_within_visual_range() and self.is_near_gps_goal():
-                rospy.loginfo("CONDITIONS MET: Triggering transition to VISUAL_SERVOING")
-                self.visual_target_acquired()
-            else:
-                rospy.logwarn(f"Cannot transition to VISUAL_SERVOING - ArUco: {self.is_aruco_detected_confident()}, Distance: {self.target_distance:.2f}<={self.visual_activation_distance}, Near GPS: {self.is_near_gps_goal()}")
-        elif self.navigation_mode == "gps_tracking" and self.state == "visual_servoing":
-            # Navigation manager switched back to GPS (likely lost visual)
-            self.visual_target_lost()
+        # Update target distance if we have a pose
+        if self.current_pose:
+            self.update_target_distance()
+    
+    def update_target_distance(self):
+        """Calculate distance to active target"""
+        if not self.current_pose:
+            return
             
-    def distance_callback(self, msg):
-        self.target_distance = msg.data
+        # Determine which target to measure distance to
+        target = None
+        if self.state == "visual_servoing" and self.visual_target:
+            target = self.visual_target
+        elif self.state == "gps_navigation" and self.gps_target:
+            target = self.gps_target
+            
+        if target:
+            dx = target.pose.position.x - self.current_pose.pose.position.x
+            dy = target.pose.position.y - self.current_pose.pose.position.y
+            dz = target.pose.position.z - self.current_pose.pose.position.z
+            self.target_distance = math.sqrt(dx*dx + dy*dy + dz*dz)
+            self.target_distance_pub.publish(Float32(self.target_distance))
         
         # Check for visual activation
         if (self.state == "gps_navigation" and 
             self.is_aruco_detected_confident() and 
             self.is_within_visual_range() and
             self.is_near_gps_goal()):
-            rospy.loginfo(f"Distance callback: Attempting visual transition - ArUco: {self.is_aruco_detected_confident()}, Range: {self.is_within_visual_range()}, Near GPS: {self.is_near_gps_goal()}")
+            rospy.loginfo(f"Visual activation check - ArUco: {self.is_aruco_detected_confident()}, Range: {self.is_within_visual_range()}, Near GPS: {self.is_near_gps_goal()}")
             self.visual_target_acquired()
             
     def aruco_status_callback(self, msg):
@@ -335,11 +345,13 @@ class EnhancedDroneStateMachine(Machine):
         
     def pose_callback(self, msg):
         self.current_pose = msg
-
-    def visual_target_callback(self, msg):
-        self.visual_target_pose = msg
+        # Update distance whenever pose updates
+        self.update_target_distance()
 
     def check_goal_status(self, event=None):
+        # Publish active goal continuously
+        self.publish_active_goal()
+        
         if self.state == "visual_servoing":
             if self.check_visual_goal_reached_conditions():
                 rospy.loginfo("Visual goal reached, triggering transition to performing_task")
@@ -365,19 +377,30 @@ class EnhancedDroneStateMachine(Machine):
             self.trigger('mission_complete')  # This will transition to returning_home
         
     def set_navigation_mode(self, mode):
-        """Call navigation mode manager to switch modes"""
-        try:
-            req = SetNavigationModeRequest()
-            req.mode = mode
-            resp = self.nav_mode_client.call(req)
-            if resp.success:
-                rospy.loginfo(f"Navigation mode set to: {mode}")
-            else:
-                rospy.logwarn(f"Failed to set navigation mode: {resp.message}")
-            return resp.success
-        except rospy.ServiceException as e:
-            rospy.logerr(f"Navigation mode service call failed: {e}")
-            return False
+        """Directly set navigation mode and publish it"""
+        self.navigation_mode = mode
+        self.mode_pub.publish(String(mode))
+        rospy.loginfo(f"Navigation mode set to: {mode}")
+        
+        # Select and publish appropriate goal based on mode
+        self.publish_active_goal()
+        return True
+    
+    def publish_active_goal(self):
+        """Publish the active goal based on current navigation mode"""
+        if self.navigation_mode == "gps_tracking" and self.gps_target:
+            self.gps_goal_pub.publish(self.gps_target)
+            self.active_target = self.gps_target
+        elif self.navigation_mode == "visual_servoing" and self.visual_target:
+            self.visual_goal_pub.publish(self.visual_target)
+            self.active_target = self.visual_target
+        elif self.navigation_mode == "search":
+            # In search mode, might hover at current GPS target or implement search pattern
+            if self.gps_target:
+                self.gps_goal_pub.publish(self.gps_target)
+                self.active_target = self.gps_target
+        else:
+            self.active_target = None
             
     def arm_and_set_offboard(self):
         """Arm the drone and set OFFBOARD mode"""
@@ -431,6 +454,8 @@ class EnhancedDroneStateMachine(Machine):
             goal.pose.position.z = coords[2]
             goal.pose.orientation.w = 1.0
             
+            # Store as GPS target and publish to mission topic
+            self.gps_target = goal
             self.mission_goal_pub.publish(goal)
             rospy.loginfo(f"Published mission goal: {coords}")
             
@@ -516,6 +541,8 @@ class EnhancedDroneStateMachine(Machine):
         goal.pose.position.z = self.home_position[2]
         goal.pose.orientation.w = 1.0
         
+        # Store as GPS target and publish
+        self.gps_target = goal
         self.mission_goal_pub.publish(goal)
         self.state_pub.publish(String("returning_home"))
         
