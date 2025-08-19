@@ -44,7 +44,7 @@
             <param name="max_velocity" value="2.0"/>
             
             <!-- Output to test topic first, not directly to mavros -->
-            <!-- <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/> -->
+            <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/>
         </node>
       
         <!-- Enhanced Drone State Machine -->
@@ -59,36 +59,7 @@
 
 
         <!-- Dynamics-Aware 3D Velocity-Obstacle Safety Filter -->
-        <node pkg="uav_autonomous_utils" type="dynamics_aware_vo_filter.py" 
-              name="dynamics_aware_vo_filter_3d" output="screen">
-            <!-- Topics -->
-            <param name="input_twist_topic" value="/uav/attractive_velocity" />
-            <param name="output_twist_topic" value="/mavros/setpoint_velocity/cmd_vel" />
-            <param name="cloud_topic" value="/iris/camera/depth/points" />
-            <param name="odom_topic" value="/mavros/local_position/odom" />
-            <param name="world_frame" value="odom" />
-            
-            <!-- VO / Safety Parameters -->
-            <param name="time_horizon" value="3.0" />         <!-- [s] react only if collision < τ -->
-            <param name="safety_margin" value="1.0" />       <!-- [m] -->
-            <param name="point_obstacle_radius" value="0.05" /> <!-- [m] inflate a point -->
-            <param name="max_obstacles" value="16" />
-            <param name="min_range" value="0.30" />           <!-- [m] ignore too-close returns (self-body) -->
-            <param name="max_range" value="12.0" />           <!-- [m] -->
-            <param name="max_rot_iter" value="3" />           <!-- VO resolve iterations -->
-            <param name="boundary_eps" value="0.001" />
-            <param name="voxel_size" value="0.20" />          <!-- [m] for light downsampling -->
-            
-            <!-- Dynamics-aware closeness (body-aligned weights) -->
-            <param name="w_body_x" value="2.0" />             <!-- Weight for forward/backward in drone frame -->
-            <param name="w_body_y" value="1.0" />             <!-- Weight for left/right in drone frame -->
-            <param name="w_body_z" value="4.0" />             <!-- Weight for up/down in drone frame (higher = less preferred) -->
-            
-            <!-- Speed limits (consistent with PX4 style limits) -->
-            <param name="v_xy_max" value="3.0" />             <!-- [m/s] max horizontal speed -->
-            <param name="v_z_up_max" value="1.5" />           <!-- [m/s] max upward speed -->
-            <param name="v_z_dn_max" value="1.0" />           <!-- [m/s] max downward speed magnitude -->
-        </node>
+        
        
         
     </group>
@@ -120,6 +91,37 @@
             <!-- <remap from="/uav/attractive_velocity" to="/test/attractive_velocity"/> -->
             <!-- <remap from="/iris/camera/depth/points" to="/test/pointcloud"/> -->
             <!-- <remap from="/mavros/setpoint_velocity/cmd_vel" to="/test/final_velocity"/> -->
+        </node>
+
+        <node pkg="uav_autonomous_utils" type="dynamics_aware_vo_filter.py" 
+              name="dynamics_aware_vo_filter_3d" output="screen">
+            <!-- Topics -->
+            <param name="input_twist_topic" value="/uav/attractive_velocity" />
+            <param name="output_twist_topic" value="/mavros/setpoint_velocity/cmd_vel" />
+            <param name="cloud_topic" value="/iris/camera/depth/points" />
+            <param name="odom_topic" value="/mavros/local_position/odom" />
+            <param name="world_frame" value="odom" />
+            
+            <!-- VO / Safety Parameters -->
+            <param name="time_horizon" value="3.0" />         <!-- [s] react only if collision < τ -->
+            <param name="safety_margin" value="1.0" />       <!-- [m] -->
+            <param name="point_obstacle_radius" value="0.05" /> <!-- [m] inflate a point -->
+            <param name="max_obstacles" value="16" />
+            <param name="min_range" value="0.30" />           <!-- [m] ignore too-close returns (self-body) -->
+            <param name="max_range" value="12.0" />           <!-- [m] -->
+            <param name="max_rot_iter" value="3" />           <!-- VO resolve iterations -->
+            <param name="boundary_eps" value="0.001" />
+            <param name="voxel_size" value="0.20" />          <!-- [m] for light downsampling -->
+            
+            <!-- Dynamics-aware closeness (body-aligned weights) -->
+            <param name="w_body_x" value="2.0" />             <!-- Weight for forward/backward in drone frame -->
+            <param name="w_body_y" value="1.0" />             <!-- Weight for left/right in drone frame -->
+            <param name="w_body_z" value="4.0" />             <!-- Weight for up/down in drone frame (higher = less preferred) -->
+            
+            <!-- Speed limits (consistent with PX4 style limits) -->
+            <param name="v_xy_max" value="3.0" />             <!-- [m/s] max horizontal speed -->
+            <param name="v_z_up_max" value="1.5" />           <!-- [m/s] max upward speed -->
+            <param name="v_z_dn_max" value="1.0" />           <!-- [m/s] max downward speed magnitude -->
         </node>
         
     </group>

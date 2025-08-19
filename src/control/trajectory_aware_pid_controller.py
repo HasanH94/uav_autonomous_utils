@@ -171,9 +171,9 @@ class TrajectoryAwarePIDController:
                 self.control_mode = ControlMode.POSITION_SETPOINT # Ensure control mode is appropriate
                 self.last_input_time[InputPriority.GPS] = rospy.Time.now() # Reset timestamp to prevent immediate staleness
                 # Explicitly re-process the last GPS target to ensure it's accepted with the new priority
-                if self.gps_target:
-                    rospy.loginfo("Re-processing last GPS target after priority reset.")
-                    self.gps_goal_callback(self.gps_target)
+                # if self.gps_target:
+                #     rospy.loginfo("Re-processing last GPS target after priority reset.")
+                #     self.gps_goal_callback(self.gps_target)
 
     def distance_callback(self, msg):
         self.target_distance = msg.data
