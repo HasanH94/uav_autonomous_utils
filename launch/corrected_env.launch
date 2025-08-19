@@ -96,7 +96,6 @@
         <param name="x_offset"             value="0.0"/>
         <param name="target_frame"         value="odom"/>
         <param name="enable_visualization" value="false"/>
-        <param name="output_goal_topic"    value="/move_base_visual"/>
         <param name="camera_info_topic"    value="/iris/camera/rgb/camera_info"/>
     </node>
 

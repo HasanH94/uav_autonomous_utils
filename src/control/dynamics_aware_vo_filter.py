@@ -37,9 +37,9 @@ class DynamicsAwareVOFilter3D(object):
         self.world_frame = rospy.get_param('~world_frame', 'odom')
 
         # VO / safety params
-        self.time_horizon = rospy.get_param('~time_horizon', 2.0)         # [s] react only if collision < τ
-        self.safety_margin = rospy.get_param('~safety_margin', 0.30)      # [m]
-        self.point_obstacle_radius = rospy.get_param('~point_obstacle_radius', 0.15)  # [m] inflate a point
+        self.time_horizon = rospy.get_param('~time_horizon', 3.0)         # [s] react only if collision < τ
+        self.safety_margin = rospy.get_param('~safety_margin', 1.0)      # [m]
+        self.point_obstacle_radius = rospy.get_param('~point_obstacle_radius', 0.05)  # [m] inflate a point
         self.max_obstacles = rospy.get_param('~max_obstacles', 16)
         self.min_range = rospy.get_param('~min_range', 0.30)              # [m] ignore too-close returns (self-body)
         self.max_range = rospy.get_param('~max_range', 12.0)              # [m]
@@ -131,6 +131,8 @@ class DynamicsAwareVOFilter3D(object):
         out.twist.angular.z = msg.twist.angular.z  # pass-through yaw rate if any
         self.pub.publish(out)
 
+        rospy.loginfo(f"VO Filter: v_des={v_des}, v_safe={v_safe}, obstacles={len(obstacles) if obstacles is not None else 0}")
+
     # ---------- Core: dynamics-aware 3D VO ----------
 
     def _compute_safe_velocity(self, v_des, obstacles):
@@ -165,7 +167,7 @@ class DynamicsAwareVOFilter3D(object):
 
             # 2) Conservative options: slightly slow down, or full stop if inside bubble
             candidates.append(self._clip_speed(0.7 * v))
-            candidates.append(np.zeros(3))
+            # candidates.append(np.zeros(3))
 
             # Choose candidate that (i) reduces total violations and (ii) minimizes dynamics-aware cost
             best = None
@@ -191,9 +193,12 @@ class DynamicsAwareVOFilter3D(object):
         return v
 
     def _violations(self, v, obstacles):
+        # rospy.loginfo(f"_violations: Checking v={v} against {len(obstacles) if obstacles is not None else 0} obstacles.")
         """Return list of obstacles for which v would cause collision within time_horizon."""
         viols = []
         v_norm = np.linalg.norm(v) + 1e-9
+        ang = None # Initialize ang
+        theta = None # Initialize theta
         for obs in obstacles:
             p = obs['p'] - self.pos
             d = np.linalg.norm(p)
@@ -201,6 +206,7 @@ class DynamicsAwareVOFilter3D(object):
 
             if d <= R:
                 # Already inside a safety bubble -> treat as violation (prefer stop)
+                rospy.loginfo(f"Violation: Inside safety bubble (d={d:.2f}, R={R:.2f})")
                 viols.append(obs)
                 continue
 
@@ -215,7 +221,13 @@ class DynamicsAwareVOFilter3D(object):
                 theta = math.asin(min(1.0, R / d))
                 ang = math.acos(np.clip(np.dot(v / v_norm, p_hat), -1.0, 1.0))
                 if ang <= theta:
+                    rospy.loginfo(f"Violation: TTC (d={d:.2f}, R={R:.2f}, ttc={ttc:.2f}, time_horizon={self.time_horizon:.2f}, ang={math.degrees(ang):.2f}, theta={math.degrees(theta):.2f})")
                     viols.append(obs)
+            else:
+                log_ang = f"ang={math.degrees(ang):.2f}" if ang is not None else "ang=N/A"
+                log_theta = f"theta={math.degrees(theta):.2f}" if theta is not None else "theta=N/A"
+                rospy.loginfo(f"No Violation: d={d:.2f}, R={R:.2f}, ttc={ttc:.2f}, time_horizon={self.time_horizon:.2f}, {log_ang}, {log_theta}")
+        rospy.loginfo(f"_violations: Found {len(viols)} violations.")
         return viols
 
     def _rotate_to_cone_boundary(self, v, obs):
@@ -224,7 +236,8 @@ class DynamicsAwareVOFilter3D(object):
         d = np.linalg.norm(p)
         R = obs['r'] + self.safety_margin
         if d <= R or np.linalg.norm(v) < 1e-6:
-            return np.zeros(3)
+            # rospy.loginfo("collision almost surely happened")
+            return None
 
         p_hat = p / d
         speed = np.linalg.norm(v)

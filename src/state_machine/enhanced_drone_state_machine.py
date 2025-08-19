@@ -22,6 +22,7 @@ class EnhancedDroneStateMachine(Machine):
         {'name': 'search_for_object', 'on_enter': 'on_enter_search_for_object', 'on_exit': 'on_exit_search_for_object'},
         {'name': 'performing_task', 'on_enter': 'on_enter_performing_task', 'on_exit': 'on_exit_performing_task'},
         {'name': 'returning_home', 'on_enter': 'on_enter_returning_home', 'on_exit': 'on_exit_returning_home'},
+        {'name': 'takeoff', 'on_enter': 'on_enter_takeoff', 'on_exit': 'on_exit_takeoff'},
         {'name': 'landing', 'on_enter': 'on_enter_landing'},
     ]
     
@@ -37,6 +38,7 @@ class EnhancedDroneStateMachine(Machine):
         # Parameters
         self.goal_points = rospy.get_param('~goal_points', [])
         self.home_position = rospy.get_param('~home_position', [0.0, 0.0, 2.0])
+        self.takeoff_altitude = rospy.get_param('~takeoff_altitude', 2.0)
         
         # ArUco detection with sliding window
         self.aruco_detection_window_size = rospy.get_param('~aruco_detection_window_size', 30)  # frames (~1.5s at 20Hz)
@@ -45,6 +47,7 @@ class EnhancedDroneStateMachine(Machine):
         
         self.visual_activation_distance = rospy.get_param('~visual_activation_distance', 15.0)
         self.gps_goal_tolerance = rospy.get_param('~gps_goal_tolerance', 1.0)  # Consider reached if within 1m
+        self.home_position_tolerance = rospy.get_param('~home_position_tolerance', 0.5) # More accurate tolerance for home
         self.visual_gps_tolerance = rospy.get_param('~visual_gps_tolerance', 3.0) # Must be near GPS goal to activate visual
         self.search_timeout = rospy.get_param('~search_timeout', 30.0)
         self.visual_pos_tolerance = rospy.get_param('~visual_pos_tolerance', 0.2)
@@ -76,14 +79,12 @@ class EnhancedDroneStateMachine(Machine):
         self.goal_check_timer = rospy.Timer(rospy.Duration(0.1), self.check_goal_status)
         
         # Publishers
-        self.mission_goal_pub = rospy.Publisher('/move_base_mission', PoseStamped, queue_size=10)
         self.state_pub = rospy.Publisher('/state_machine/current_state', String, queue_size=1)
         
         # Navigation mode and goal publishers (replacing navigation_mode_manager)
         self.mode_pub = rospy.Publisher('/navigation/current_mode', String, queue_size=1)
         self.target_distance_pub = rospy.Publisher('/navigation/target_distance', Float32, queue_size=1)
         self.gps_goal_pub = rospy.Publisher('/move_base_gps', PoseStamped, queue_size=10)
-        self.visual_goal_pub = rospy.Publisher('/move_base_visual', PoseStamped, queue_size=10)
         
         # Subscribers
         self.setup_subscribers()
@@ -96,7 +97,7 @@ class EnhancedDroneStateMachine(Machine):
     def setup_subscribers(self):
         # ArUco detection and visual target
         rospy.Subscriber('/aruco_detection_status', Bool, self.aruco_status_callback)
-        rospy.Subscriber('/aruco_offset_pose', PoseStamped, self.visual_goal_callback)
+        rospy.Subscriber('/move_base_visual', PoseStamped, self.visual_goal_callback)
         
         # Event triggers
         # rospy.Subscriber('/drone_events/reached_goal_point', Bool, self.goal_reached_callback) # Removed, now handled internally
@@ -111,8 +112,16 @@ class EnhancedDroneStateMachine(Machine):
         self.add_transition(
             trigger='start_mission',
             source='idle',
-            dest='gps_navigation',
+            dest='takeoff',
             conditions=['has_mission_goals']
+        )
+
+        # From takeoff
+        self.add_transition(
+            trigger='takeoff_complete',
+            source='takeoff',
+            dest='gps_navigation',
+            conditions=['is_takeoff_altitude_reached']
         )
         
         # From GPS navigation
@@ -196,6 +205,11 @@ class EnhancedDroneStateMachine(Machine):
     def is_last_goal(self, event=None):
         return self.current_mission_goal_index >= len(self.goal_points) - 1
 
+    def is_takeoff_altitude_reached(self, event=None):
+        if self.current_pose:
+            return self.current_pose.pose.position.z >= self.takeoff_altitude
+        return False
+
     def is_near_gps_goal(self, event=None):
         if not self.current_pose or self.current_mission_goal_index >= len(self.goal_points):
             return False
@@ -258,6 +272,19 @@ class EnhancedDroneStateMachine(Machine):
 
                 if distance <= self.gps_goal_tolerance:
                     rospy.loginfo(f"GPS goal reached (within {distance:.2f}m)")
+                    return True
+        return False
+
+    def check_home_reached_conditions(self):
+        if self.state == "returning_home":
+            if self.current_pose:
+                dx = self.home_position[0] - self.current_pose.pose.position.x
+                dy = self.home_position[1] - self.current_pose.pose.position.y
+                dz = self.home_position[2] - self.current_pose.pose.position.z
+                distance = math.sqrt(dx*dx + dy*dy + dz*dz)
+
+                if distance <= self.home_position_tolerance:
+                    rospy.loginfo(f"Home position reached (within {distance:.2f}m)")
                     return True
         return False
 
@@ -360,6 +387,13 @@ class EnhancedDroneStateMachine(Machine):
             if self.check_gps_goal_reached_conditions():
                 rospy.loginfo("GPS goal reached, triggering transition to search_for_object or next GPS goal")
                 self.gps_goal_reached()
+        elif self.state == "returning_home":
+            if self.check_home_reached_conditions():
+                self.home_reached()
+        elif self.state == "takeoff":
+            if self.is_takeoff_altitude_reached():
+                rospy.loginfo(f"Takeoff altitude {self.takeoff_altitude}m reached, transitioning to GPS navigation")
+                self.takeoff_complete()
 
     # Actions
     def increment_goal_index(self, event=None):
@@ -392,7 +426,6 @@ class EnhancedDroneStateMachine(Machine):
             self.gps_goal_pub.publish(self.gps_target)
             self.active_target = self.gps_target
         elif self.navigation_mode == "visual_servoing" and self.visual_target:
-            self.visual_goal_pub.publish(self.visual_target)
             self.active_target = self.visual_target
         elif self.navigation_mode == "search":
             # In search mode, might hover at current GPS target or implement search pattern
@@ -442,7 +475,7 @@ class EnhancedDroneStateMachine(Machine):
             rospy.logerr(f"Hover mode service failed: {e}")
         
     def publish_mission_goal(self):
-        """Publish current mission goal"""
+        """Set current mission goal as GPS target"""
         if self.current_mission_goal_index < len(self.goal_points):
             goal = PoseStamped()
             goal.header.frame_id = "odom"
@@ -454,10 +487,11 @@ class EnhancedDroneStateMachine(Machine):
             goal.pose.position.z = coords[2]
             goal.pose.orientation.w = 1.0
             
-            # Store as GPS target and publish to mission topic
+            # Store as GPS target
             self.gps_target = goal
-            self.mission_goal_pub.publish(goal)
-            rospy.loginfo(f"Published mission goal: {coords}")
+            rospy.loginfo(f"Set GPS target to mission goal: {coords}")
+        else:
+            rospy.logwarn("Attempted to set GPS target when all mission goals are completed.")
             
     # State entry functions
     def on_enter_idle(self, event=None):
@@ -476,7 +510,29 @@ class EnhancedDroneStateMachine(Machine):
         """Safety: Set hover mode when leaving GPS navigation"""
         # self.set_hover_mode()
         rospy.loginfo("Exiting GPS_NAVIGATION")
-        
+
+    def on_enter_takeoff(self, event=None):
+        rospy.loginfo(f"STATE: TAKEOFF - Ascending to {self.takeoff_altitude}m")
+        self.arm_and_set_offboard()
+        self.set_navigation_mode("gps_tracking") # Use gps_tracking to ascend to target altitude
+
+        # Set takeoff altitude as GPS target
+        goal = PoseStamped()
+        goal.header.frame_id = "odom"
+        goal.header.stamp = rospy.Time.now()
+        goal.pose.position.x = self.current_pose.pose.position.x if self.current_pose else 0.0
+        goal.pose.position.y = self.current_pose.pose.position.y if self.current_pose else 0.0
+        goal.pose.position.z = self.takeoff_altitude
+        goal.pose.orientation.w = 1.0
+        self.gps_target = goal
+        self.gps_goal_pub.publish(self.gps_target)
+        self.state_pub.publish(String("takeoff"))
+
+    def on_exit_takeoff(self, event=None):
+        """Safety: Set hover mode when leaving takeoff"""
+        self.set_hover_mode()
+        rospy.loginfo("Exiting TAKEOFF - hover mode set")
+
     def on_enter_visual_servoing(self, event=None):
         rospy.loginfo("STATE: VISUAL_SERVOING - Switching to visual control")
         rospy.loginfo(f"Transition conditions met - ArUco: {self.aruco_detected_consistent}, Distance: {self.target_distance:.2f}m, Near GPS: {self.is_near_gps_goal()}")
@@ -530,9 +586,8 @@ class EnhancedDroneStateMachine(Machine):
     def on_enter_returning_home(self, event=None):
         rospy.loginfo("STATE: RETURNING_HOME")
         self.arm_and_set_offboard()  # Ensure OFFBOARD mode
-        self.set_navigation_mode("gps_tracking")
-        
-        # Publish home position as goal
+
+        # Set home position as GPS target FIRST
         goal = PoseStamped()
         goal.header.frame_id = "odom"
         goal.header.stamp = rospy.Time.now()
@@ -540,10 +595,11 @@ class EnhancedDroneStateMachine(Machine):
         goal.pose.position.y = self.home_position[1]
         goal.pose.position.z = self.home_position[2]
         goal.pose.orientation.w = 1.0
-        
-        # Store as GPS target and publish
-        self.gps_target = goal
-        self.mission_goal_pub.publish(goal)
+        self.gps_target = goal # Set the gps_target to home position
+
+        # NOW set navigation mode, which will publish the correct goal
+        self.set_navigation_mode("gps_tracking")
+
         self.state_pub.publish(String("returning_home"))
         
     def on_exit_returning_home(self, event=None):
@@ -553,7 +609,6 @@ class EnhancedDroneStateMachine(Machine):
         
     def on_enter_landing(self, event=None):
         rospy.loginfo("STATE: LANDING - Mission complete")
-        self.set_navigation_mode("hold")
         
         # Set AUTO.LAND mode
         try:

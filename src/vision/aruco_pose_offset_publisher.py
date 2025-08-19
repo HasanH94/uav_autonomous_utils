@@ -25,7 +25,7 @@ class ArucoPoseOffsetPublisher:
         self.x_offset = rospy.get_param('~x_offset', 0.0) # Desired offset along marker's local X-axis
         self.camera_rgb_topic = rospy.get_param('~camera_rgb_topic', '/iris/camera/rgb/image_raw')
         self.camera_info_topic = rospy.get_param('~camera_info_topic', '/iris/camera/rgb/camera_info')
-        self.output_goal_topic = rospy.get_param('~output_goal_topic', '/aruco_offset_pose') # Output topic for the selected goal
+        self.output_goal_topic = rospy.get_param('~output_goal_topic', '/move_base_visual') # Output topic for the selected goal
         self.target_frame = rospy.get_param('~target_frame', 'odom') # Frame to publish the final pose in
         self.enable_visualization = rospy.get_param('~enable_visualization', True)
         self.min_marker_pixel_area = rospy.get_param('~min_marker_pixel_area', 400) # Minimum pixel area for a valid detection
@@ -57,7 +57,7 @@ class ArucoPoseOffsetPublisher:
         # --- Subscribers ---
         rospy.Subscriber(self.camera_info_topic, CameraInfo, self.camera_info_callback)
         rospy.Subscriber(self.camera_rgb_topic, Image, self.image_callback)
-        rospy.Subscriber('/move_base_mission', PoseStamped, self.mission_goal_callback) # Subscribe to mission goal
+        rospy.Subscriber('/move_base_gps', PoseStamped, self.mission_goal_callback) # Subscribe to mission goal
 
         rospy.loginfo("ArucoPoseOffsetPublisher node initialized. Waiting for camera info...")
 
@@ -105,7 +105,7 @@ class ArucoPoseOffsetPublisher:
                 area = cv2.contourArea(marker_corners_pixels)
 
                 if not (self.min_marker_pixel_area <= area <= self.max_marker_pixel_area):
-                    rospy.logwarn_throttle(1.0, f"Marker ID {current_marker_id} detected but area {area:.0f} is outside valid range [{self.min_marker_pixel_area}, {self.max_marker_pixel_area}]. Skipping.")
+                    # rospy.logwarn_throttle(1.0, f"Marker ID {current_marker_id} detected but area {area:.0f} is outside valid range [{self.min_marker_pixel_area}, {self.max_marker_pixel_area}]. Skipping.")
                     continue
 
                 # If we reach here, the marker passed the area filter, so it's a valid detection for this frame
@@ -221,7 +221,8 @@ class ArucoPoseOffsetPublisher:
                     if dist < min_dist:
                         min_dist = dist
                         best_marker_data = marker_data
-                rospy.loginfo_throttle(1.0, f"Selected Marker ID {best_marker_data['id']} (closest to mission goal, dist: {min_dist:.2f}m).")
+                if best_marker_data:
+                    rospy.loginfo_throttle(1.0, f"Selected Marker ID {best_marker_data['id']} (closest to mission goal, dist: {min_dist:.2f}m).")
             else:
                 # No mission goal, pick largest area
                 max_area = -1
@@ -229,8 +230,9 @@ class ArucoPoseOffsetPublisher:
                     if marker_data['area'] > max_area:
                         max_area = marker_data['area']
                         best_marker_data = marker_data
-                rospy.logwarn_throttle(1.0, f"No mission goal. Selected Marker ID {best_marker_data['id']} (largest area: {max_area:.0f}).")
-
+                if best_marker_data:
+                    # rospy.logwarn_throttle(1.0, f"No mission goal. Selected Marker ID {best_marker_data['id']} (largest area: {max_area:.0f}).")
+                    pass
         # --- Publish Selected Pose ---
         if best_marker_data:
             self.selected_offset_pose_pub.publish(best_marker_data['offset_pose_stamped_odom'])

@@ -24,9 +24,9 @@
             <rosparam param="ki_position">[0.02, 0.02, 0.02, 0.01]</rosparam>
             <rosparam param="kd_position">[0.07, 0.07, 0.04, 0.05]</rosparam> -->
 
-            <rosparam param="kp_position">[6.0, 6.0, 6.0, 0.8]</rosparam>
-            <rosparam param="ki_position">[4.5, 4.5, 4.5, 0.01]</rosparam>
-            <rosparam param="kd_position">[0.33, 0.33, 0.33, 0.05]</rosparam>
+            <rosparam param="kp_position">[0.8, 0.8, 0.8, 0.8]</rosparam>
+            <rosparam param="ki_position">[0.05, 0.05, 0.05, 0.01]</rosparam>
+            <rosparam param="kd_position">[0.4, 0.4, 0.4, 0.05]</rosparam>
 
             <!-- Gains for Trajectory Tracking Mode (PD Controller) -->
             <rosparam param="kp_trajectory">[1.2, 1.2, 0.8, 1.0]</rosparam>
@@ -39,26 +39,26 @@
             <param name="yaw_distance_threshold" value="60.0"/>
             <param name="yaw_injection_distance" value="1.5"/>
             <param name="max_yaw_rate" value="1.5"/>
-            <param name="control_frequency" value="20.0"/>
+            <param name="control_frequency" value="100.0"/>
             <param name="search_yaw_rate" value="0.5"/>
             <param name="max_velocity" value="2.0"/>
             
             <!-- Output to test topic first, not directly to mavros -->
-            <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/>
+            <!-- <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/> -->
         </node>
       
         <!-- Enhanced Drone State Machine -->
         <node pkg="uav_autonomous_utils" type="enhanced_drone_state_machine.py" name="drone_state_machine" output="screen">
             <rosparam param="goal_points">[[10.0, -3.0, 3.0], [10.0, -10.0, 3.0]]</rosparam>
             <rosparam param="home_position">[0.0, 0.0, 2.0]</rosparam>
-            <param name="aruco_detection_window_size" value="30"/>
-            <param name="aruco_detection_threshold" value="0.6"/>
+            <param name="aruco_detection_window_size" value="20"/>
+            <param name="aruco_detection_threshold" value="0.2"/>
             <param name="gps_goal_tolerance" value="3.0"/>
             <param name="visual_pose_tolerance" value="0.3"/>
         </node>
 
 
-                <!-- Dynamics-Aware 3D Velocity-Obstacle Safety Filter -->
+        <!-- Dynamics-Aware 3D Velocity-Obstacle Safety Filter -->
         <node pkg="uav_autonomous_utils" type="dynamics_aware_vo_filter.py" 
               name="dynamics_aware_vo_filter_3d" output="screen">
             <!-- Topics -->
@@ -69,8 +69,8 @@
             <param name="world_frame" value="odom" />
             
             <!-- VO / Safety Parameters -->
-            <param name="time_horizon" value="2.0" />         <!-- [s] react only if collision < τ -->
-            <param name="safety_margin" value="0.60" />       <!-- [m] -->
+            <param name="time_horizon" value="3.0" />         <!-- [s] react only if collision < τ -->
+            <param name="safety_margin" value="1.0" />       <!-- [m] -->
             <param name="point_obstacle_radius" value="0.05" /> <!-- [m] inflate a point -->
             <param name="max_obstacles" value="16" />
             <param name="min_range" value="0.30" />           <!-- [m] ignore too-close returns (self-body) -->
@@ -89,6 +89,7 @@
             <param name="v_z_up_max" value="1.5" />           <!-- [m/s] max upward speed -->
             <param name="v_z_dn_max" value="1.0" />           <!-- [m/s] max downward speed magnitude -->
         </node>
+       
         
     </group>
     

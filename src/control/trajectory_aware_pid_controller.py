@@ -161,6 +161,19 @@ class TrajectoryAwarePIDController:
     def navigation_mode_callback(self, msg):
         """Track navigation mode from mode manager"""
         self.navigation_mode = msg.data
+        # Add logic here to reset priority
+        if self.navigation_mode == "gps_tracking":
+            # When returning to GPS tracking, reset priority to GPS
+            # This allows GPS goals to be accepted again
+            if self.current_priority.value < InputPriority.GPS.value: # Only reset if current is higher priority
+                rospy.loginfo(f"Navigation mode changed to GPS_TRACKING. Resetting PID priority from {self.current_priority.name} to GPS.")
+                self.current_priority = InputPriority.GPS
+                self.control_mode = ControlMode.POSITION_SETPOINT # Ensure control mode is appropriate
+                self.last_input_time[InputPriority.GPS] = rospy.Time.now() # Reset timestamp to prevent immediate staleness
+                # Explicitly re-process the last GPS target to ensure it's accepted with the new priority
+                if self.gps_target:
+                    rospy.loginfo("Re-processing last GPS target after priority reset.")
+                    self.gps_goal_callback(self.gps_target)
 
     def distance_callback(self, msg):
         self.target_distance = msg.data
@@ -251,6 +264,10 @@ class TrajectoryAwarePIDController:
                      
     def visual_goal_callback(self, msg):
         """Handle visual servoing target with high priority"""
+        # Only accept visual input if in visual servoing mode
+        if self.navigation_mode != "visual_servoing":
+            return
+
         if not self.should_accept_input(InputPriority.VISUAL):
             return
             
