@@ -309,6 +309,9 @@ class EnhancedDroneStateMachine(Machine):
             target = self.visual_target
         elif self.state == "gps_navigation" and self.gps_target:
             target = self.gps_target
+        elif self.state == "returning_home" and self.gps_target:
+            # During returning_home, gps_target should be set to home position
+            target = self.gps_target
             
         if target:
             dx = target.pose.position.x - self.current_pose.pose.position.x

@@ -171,9 +171,9 @@ class TrajectoryAwarePIDController:
                 self.control_mode = ControlMode.POSITION_SETPOINT # Ensure control mode is appropriate
                 self.last_input_time[InputPriority.GPS] = rospy.Time.now() # Reset timestamp to prevent immediate staleness
                 # Explicitly re-process the last GPS target to ensure it's accepted with the new priority
-                # if self.gps_target:
-                #     rospy.loginfo("Re-processing last GPS target after priority reset.")
-                #     self.gps_goal_callback(self.gps_target)
+                if self.gps_target:
+                    rospy.loginfo("Re-processing last GPS target after priority reset.")
+                    self.gps_goal_callback(self.gps_target)
 
     def distance_callback(self, msg):
         self.target_distance = msg.data
@@ -241,6 +241,9 @@ class TrajectoryAwarePIDController:
         
     def gps_goal_callback(self, msg):
         """Handle GPS waypoint with lowest priority"""
+        # Always store the GPS target for reference (needed for hybrid yaw calculation)
+        self.gps_target = msg
+        
         if not self.should_accept_input(InputPriority.GPS):
             return
             
@@ -248,7 +251,6 @@ class TrajectoryAwarePIDController:
         self.current_priority = InputPriority.GPS
         self.last_input_time[InputPriority.GPS] = rospy.Time.now()
         
-        self.gps_target = msg
         self.target_pos[0] = msg.pose.position.x
         self.target_pos[1] = msg.pose.position.y
         self.target_pos[2] = msg.pose.position.z
