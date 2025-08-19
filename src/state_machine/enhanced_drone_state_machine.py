@@ -43,11 +43,11 @@ class EnhancedDroneStateMachine(Machine):
         self.aruco_detection_threshold = rospy.get_param('~aruco_detection_threshold', 0.7)  # 70% of frames must have detection
         self.aruco_detection_history = []  # Sliding window of detections (True/False)
         
-        self.visual_activation_distance = rospy.get_param('~visual_activation_distance', 10.0)
+        self.visual_activation_distance = rospy.get_param('~visual_activation_distance', 15.0)
         self.gps_goal_tolerance = rospy.get_param('~gps_goal_tolerance', 1.0)  # Consider reached if within 1m
         self.visual_gps_tolerance = rospy.get_param('~visual_gps_tolerance', 3.0) # Must be near GPS goal to activate visual
         self.search_timeout = rospy.get_param('~search_timeout', 30.0)
-        self.visual_pos_tolerance = rospy.get_param('~visual_pos_tolerance', 0.1)
+        self.visual_pos_tolerance = rospy.get_param('~visual_pos_tolerance', 0.2)
         self.visual_yaw_tolerance_deg = rospy.get_param('~visual_yaw_tolerance_deg', 5.0)
 
         # State tracking
@@ -474,8 +474,8 @@ class EnhancedDroneStateMachine(Machine):
         
     def on_exit_gps_navigation(self, event=None):
         """Safety: Set hover mode when leaving GPS navigation"""
-        self.set_hover_mode()
-        rospy.loginfo("Exiting GPS_NAVIGATION - hover mode set")
+        # self.set_hover_mode()
+        rospy.loginfo("Exiting GPS_NAVIGATION")
         
     def on_enter_visual_servoing(self, event=None):
         rospy.loginfo("STATE: VISUAL_SERVOING - Switching to visual control")

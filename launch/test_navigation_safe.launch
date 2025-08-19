@@ -3,7 +3,7 @@
 
     <!-- Safe Testing Launch File - Start components one by one -->
     
-    <arg name="test_mode" default="full"/>  <!-- basic, with_state_machine, full -->
+    <arg name="test_mode" default="basic"/>  <!-- basic, with_state_machine, full -->
     
     <!-- Stage 1: Basic Components (always start these) -->
     <group if="$(eval arg('test_mode') in ['basic', 'with_state_machine', 'full'])">
@@ -20,8 +20,8 @@
               name="trajectory_aware_pid" output="screen">
             <param name="enable_trajectory_mode" value="true"/>
             <param name="priority_mode" value="auto"/>
-            <rosparam param="kp_position">[0.8, 0.8, 0.6, 0.8]</rosparam>
-            <rosparam param="ki_position">[0.05, 0.05, 0.05, 0.01]</rosparam>
+            <rosparam param="kp_position">[0.5, 0.5, 0.5, 0.8]</rosparam>
+            <rosparam param="ki_position">[0.02, 0.02, 0.02, 0.01]</rosparam>
             <rosparam param="kd_position">[0.07, 0.07, 0.04, 0.05]</rosparam>
 
             <!-- Gains for Trajectory Tracking Mode (PD Controller) -->
@@ -37,27 +37,30 @@
             <param name="max_yaw_rate" value="1.5"/>
             <param name="control_frequency" value="20.0"/>
             <param name="search_yaw_rate" value="0.5"/>
+            <param name="max_velocity" value="1.5"/>
             
             <!-- Output to test topic first, not directly to mavros -->
-            <!-- <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/> -->
+            <remap from="/uav/attractive_velocity" to="/mavros/setpoint_velocity/cmd_vel"/>
         </node>
+      
+        <!-- Enhanced Drone State Machine -->
+        <node pkg="uav_autonomous_utils" type="enhanced_drone_state_machine.py" name="drone_state_machine" output="screen">
+            <rosparam param="goal_points">[[10.0, -3.0, 3.0], [10.0, -10.0, 3.0]]</rosparam>
+            <rosparam param="home_position">[0.0, 0.0, 2.0]</rosparam>
+            <param name="aruco_detection_window_size" value="30"/>
+            <param name="aruco_detection_threshold" value="0.6"/>
+            <param name="gps_goal_tolerance" value="3.0"/>
+            <param name="visual_pose_tolerance" value="0.3"/>
+        </node>
+
+
         
     </group>
     
     <!-- Stage 2: Add State Machine -->
-    <group if="$(eval arg('test_mode') in ['with_state_machine', 'full'])">
+    <!-- <group if="$(eval arg('test_mode') in ['with_state_machine', 'full'])">
         
-        <node pkg="uav_autonomous_utils" type="enhanced_drone_state_machine.py" 
-              name="drone_state_machine" output="screen">
-            <rosparam param="goal_points">[[10.0, -5.0, 3.0], [10.0, -10.0, 3.0]]</rosparam>
-            <rosparam param="home_position">[0.0, 0.0, 2.0]</rosparam>
-            <param name="aruco_detection_window_size" value="30"/>
-            <param name="aruco_detection_threshold" value="0.7"/>
-            <param name="gps_goal_tolerance" value="3.0"/>
-            <param name="visual_pose_tolerance" value="0.3"/>
-        </node>
-        
-    </group>
+    </group> -->
     
     <!-- Stage 3: Full System with APF -->
     <group if="$(eval arg('test_mode') == 'full')">
