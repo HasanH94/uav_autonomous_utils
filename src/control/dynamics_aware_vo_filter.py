@@ -51,21 +51,31 @@ class DynamicsAwareVOFilter3D(object):
         self.voxel_size = rospy.get_param('~voxel_size', 0.20)            # [m] for light downsampling
 
         # Dynamics-aware closeness (body-aligned weights)
-        # Penalize vertical changes more than lateral (typical on multirotors).
-        self.w_body_x = rospy.get_param('~w_body_x', 1.0)   # forward/backward in drone frame
-        self.w_body_y = rospy.get_param('~w_body_y', 1.0)   # left/right in drone frame  
-        self.w_body_z = rospy.get_param('~w_body_z', 3.0)   # up/down in drone frame
+        # Weight preferences in BODY frame: easier to move in Y than X than Z
+        self.w_body_x = rospy.get_param('~w_body_x', 2.0)   # forward/backward in body frame
+        self.w_body_y = rospy.get_param('~w_body_y', 1.0)   # left/right in body frame (easiest)
+        self.w_body_z = rospy.get_param('~w_body_z', 4.0)   # up/down in body frame (hardest)
 
-        # Speed limits (roughly consistent with PX4 style limits)
-        self.v_xy_max = rospy.get_param('~v_xy_max', 3.0)   # [m/s]
-        self.v_z_up_max = rospy.get_param('~v_z_up_max', 1.5)   # [m/s] positive z
-        self.v_z_dn_max = rospy.get_param('~v_z_dn_max', 1.0)   # [m/s] magnitude for negative z
+        # Speed limit (total velocity magnitude)
+        self.max_speed = rospy.get_param('~max_speed', 3.0)   # [m/s] max total velocity
 
         # State
-        self.pos = np.zeros(3)
+        self.pos = np.zeros(3)  # Position in world frame
+        self.vel = np.zeros(3)  # Velocity in world frame (from odom)
         self.R_wb = np.eye(3)   # body->world rotation
-        self.cloud_pts = None   # Nx3 numpy array in world frame
+        self.cloud_pts = None   # Nx3 numpy array in CAMERA frame
         self.cloud_lock = threading.Lock()
+        
+        # Camera to body transformation (typical forward-facing camera)
+        # Camera: +X forward, +Y left, +Z up (optical convention)
+        # Body: +X forward, +Y left, +Z up (FLU convention)
+        # If camera is mounted aligned with body, this is identity
+        # Adjust based on your actual camera mounting
+        self.R_cb = np.eye(3)  # camera-to-body rotation
+        
+        # TF buffer for transforming point clouds
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         # IO
         self.pub = rospy.Publisher(self.output_twist_topic, TwistStamped, queue_size=10)
@@ -80,6 +90,7 @@ class DynamicsAwareVOFilter3D(object):
 
     def odom_cb(self, msg):
         self.pos[:] = [msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z]
+        self.vel[:] = [msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z]
         q = msg.pose.pose.orientation
         # quaternion_matrix returns a 4x4 homogeneous matrix
         R = quaternion_matrix([q.x, q.y, q.z, q.w])[:3, :3]
@@ -87,16 +98,15 @@ class DynamicsAwareVOFilter3D(object):
         self.R_wb = R
 
     def cloud_cb(self, msg):
-        """Downsampled point cloud to Nx3 numpy array in world frame (assumed same as msg.frame)."""
+        """Store downsampled point cloud in CAMERA frame (no transformation)."""
         pts = []
         # Light voxel filter via dict of voxel indices
         vox = {}
         try:
             for p in point_cloud2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True):
                 x, y, z = p
-                # Range gate relative to current pos
-                dx, dy, dz = (x - self.pos[0]), (y - self.pos[1]), (z - self.pos[2])
-                d = dx*dx + dy*dy + dz*dz
+                # Range gate in camera frame (distance from camera)
+                d = x*x + y*y + z*z
                 if d < self.min_range**2 or d > self.max_range**2:
                     continue
                 # voxel key
@@ -115,77 +125,97 @@ class DynamicsAwareVOFilter3D(object):
                 self.cloud_pts = pts
 
     def twist_cb(self, msg):
-        v_des = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z], dtype=float)
-
-        # Build obstacles from latest cloud
+        v_des_world = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z], dtype=float)
+        
+        # Transform desired velocity from world to body frame
+        v_des_body = self.R_wb.T @ v_des_world
+        
+        # Transform from body to camera frame for obstacle checking
+        v_des_camera = self.R_cb.T @ v_des_body
+        
+        # Get obstacles in camera frame
         with self.cloud_lock:
             pts = None if self.cloud_pts is None else self.cloud_pts.copy()
-
-        obstacles = self._spheres_from_cloud(pts, k=self.max_obstacles)
-
-        # Compute safe velocity
-        v_safe = self._compute_safe_velocity(v_des, obstacles)
+        
+        obstacles = self._spheres_from_cloud_camera(pts, k=self.max_obstacles)
+        
+        # Compute safe velocity in camera frame
+        v_safe_camera = self._compute_safe_velocity_camera(v_des_camera, v_des_body, obstacles)
+        
+        # Transform safe velocity back: camera -> body -> world
+        v_safe_body = self.R_cb @ v_safe_camera
+        v_safe_world = self.R_wb @ v_safe_body
+        
+        # Apply speed limit to final velocity
+        v_safe_world = self._clip_speed(v_safe_world)
 
         # Publish
         out = TwistStamped()
         out.header.stamp = rospy.Time.now()
         out.header.frame_id = self.world_frame
-        out.twist.linear.x, out.twist.linear.y, out.twist.linear.z = v_safe.tolist()
-        out.twist.angular.z = msg.twist.angular.z  # pass-through yaw rate if any
+        out.twist.linear.x, out.twist.linear.y, out.twist.linear.z = v_safe_world.tolist()
+        out.twist.angular.z = msg.twist.angular.z  # pass-through yaw rate
         self.pub.publish(out)
-
-        rospy.loginfo(f"VO Filter: v_des={v_des}, v_safe={v_safe}, obstacles={len(obstacles) if obstacles is not None else 0}")
+        
+        if np.linalg.norm(v_des_world - v_safe_world) > 0.01:
+            rospy.loginfo(f"VO Filter: v_des={v_des_world}, v_safe={v_safe_world}, obstacles={len(obstacles)}")
+        else:
+            rospy.logdebug(f"VO Filter: No correction needed")
 
     # ---------- Core: dynamics-aware 3D VO ----------
 
-    def _compute_safe_velocity(self, v_des, obstacles):
-        # Clip to speed limits first (ellipse-like: separate XY and Z)
-        v = self._clip_speed(v_des)
+    def _compute_safe_velocity_camera(self, v_des_camera, v_des_body, obstacles):
+        """Compute safe velocity in CAMERA frame, using body-frame dynamics weights."""
+        v = v_des_camera.copy()
 
         speed = np.linalg.norm(v)
         if speed < 1e-3:
             # If we're not moving, don't invent motion (keeps goal accuracy)
             return np.zeros(3)
 
-        # Pre-compute weighted metric (world-aligned from body weights)
-        W_world = self._weighted_metric_world()
+        # Dynamics weights stay in BODY frame
+        W_body = np.diag([self.w_body_x, self.w_body_y, self.w_body_z])
 
-        # Quick exit: if no imminent collision within time horizon, return v
-        if not self._violations(v, obstacles):
+        # Quick exit: if no violations, return original velocity
+        if not self._violations_camera(v, obstacles):
             return v
 
-        # Iteratively resolve violations by picking the lowest-cost candidate
-        base_des = v.copy()
+        # Iteratively resolve violations
+        base_des_camera = v.copy()
+        base_des_body = v_des_body.copy()
+        
         for _ in range(self.max_rot_iter):
-            viols = self._violations(v, obstacles)
+            viols = self._violations_camera(v, obstacles)
             if not viols:
                 break
 
             candidates = []
             # 1) For each violating obstacle, rotate minimally to cone boundary
             for obs in viols:
-                cand = self._rotate_to_cone_boundary(v, obs)
+                cand = self._rotate_to_cone_boundary_camera(v, obs)
                 if cand is not None:
-                    candidates.append(self._clip_speed(cand))
+                    candidates.append(cand)
 
             # 2) Conservative options: slightly slow down, or full stop if inside bubble
-            candidates.append(self._clip_speed(0.7 * v))
-            # candidates.append(np.zeros(3))
+            candidates.append(0.7 * v)
+            candidates.append(np.zeros(3))
 
             # Choose candidate that (i) reduces total violations and (ii) minimizes dynamics-aware cost
             best = None
             best_cost = float('inf')
             best_viol_count = 1e9
 
-            for c in candidates:
-                # Count violations after applying candidate
-                c_viol = self._violations(c, obstacles)
-                cost = self._dyn_cost(c, base_des, W_world)
+            for c_camera in candidates:
+                # Count violations in camera frame
+                c_viol = self._violations_camera(c_camera, obstacles)
+                
+                # Transform candidate to body frame for dynamics cost
+                c_body = self.R_cb @ c_camera
+                cost = self._dyn_cost_body(c_body, base_des_body, W_body)
 
-                # Prefer fewer violations, then lower cost
-                key = (len(c_viol), cost)
+                # Prefer fewer violations, then lower body-frame cost
                 if (len(c_viol) < best_viol_count) or (len(c_viol) == best_viol_count and cost < best_cost):
-                    best = c
+                    best = c_camera
                     best_cost = cost
                     best_viol_count = len(c_viol)
 
@@ -195,15 +225,14 @@ class DynamicsAwareVOFilter3D(object):
 
         return v
 
-    def _violations(self, v, obstacles):
-        # rospy.loginfo(f"_violations: Checking v={v} against {len(obstacles) if obstacles is not None else 0} obstacles.")
-        """Return list of obstacles for which v would cause collision within time_horizon."""
+    def _violations_camera(self, v, obstacles):
+        """Check violations in CAMERA frame."""
         viols = []
         v_norm = np.linalg.norm(v) + 1e-9
         ang = None # Initialize ang
         theta = None # Initialize theta
         for obs in obstacles:
-            p = obs['p'] - self.pos
+            p = obs['p']  # Already in camera frame, relative to camera
             d = np.linalg.norm(p)
             R = obs['r'] + self.safety_margin
 
@@ -233,9 +262,9 @@ class DynamicsAwareVOFilter3D(object):
         rospy.loginfo(f"_violations: Found {len(viols)} violations.")
         return viols
 
-    def _rotate_to_cone_boundary(self, v, obs):
-        """Rotate v minimally so it's tangent to the 3D collision cone of 'obs'."""
-        p = obs['p'] - self.pos
+    def _rotate_to_cone_boundary_camera(self, v, obs):
+        """Rotate v minimally in CAMERA frame."""
+        p = obs['p']  # Already in camera frame
         d = np.linalg.norm(p)
         R = obs['r'] + self.safety_margin
         if d <= R or np.linalg.norm(v) < 1e-6:
@@ -283,36 +312,30 @@ class DynamicsAwareVOFilter3D(object):
 
     # ---------- Dynamics-aware metric & speed limits ----------
 
-    def _weighted_metric_world(self):
-        # Body-aligned weights -> world frame: W_world = R_wb * W_body * R_wb^T
-        W_body = np.diag([self.w_body_x, self.w_body_y, self.w_body_z])
-        return self.R_wb.dot(W_body).dot(self.R_wb.T)
-
-    def _dyn_cost(self, v, v_des, W_world):
-        dv = (v - v_des).reshape(3, 1)
-        return float(dv.T.dot(W_world).dot(dv))
+    def _dyn_cost_body(self, v_body, v_des_body, W_body):
+        """Compute dynamics cost in BODY frame for proper UAV dynamics."""
+        dv = (v_body - v_des_body).reshape(3, 1)
+        return float(dv.T.dot(W_body).dot(dv))
 
     def _clip_speed(self, v):
+        """Clip total velocity magnitude while preserving direction."""
         v = np.array(v, dtype=float)
-        # Limit Z independently (asymmetric up/down)
-        if v[2] > self.v_z_up_max:
-            v[2] = self.v_z_up_max
-        if v[2] < -self.v_z_dn_max:
-            v[2] = -self.v_z_dn_max
-        # Limit XY by magnitude (ellipse-like with independent Z)
-        v_xy = np.linalg.norm(v[:2])
-        if v_xy > self.v_xy_max:
-            v[:2] = v[:2] * (self.v_xy_max / (v_xy + 1e-9))
+        speed = np.linalg.norm(v)
+        
+        if speed > self.max_speed:
+            # Scale down to max speed while preserving direction
+            v = v * (self.max_speed / speed)
+        
         return v
 
     # ---------- Point cloud -> obstacle spheres ----------
 
-    def _spheres_from_cloud(self, pts, k=16):
-        """Pick the k nearest unique points (to current pos) as small inflated spheres."""
+    def _spheres_from_cloud_camera(self, pts, k=16):
+        """Pick k nearest points in CAMERA frame."""
         if pts is None or pts.shape[0] == 0:
             return []
-        # Distances to current vehicle position
-        rel = pts - self.pos.reshape(1, 3)
+        # Points already relative to camera
+        rel = pts
         d2 = np.sum(rel * rel, axis=1)
         # Filter & take nearest k
         mask = (d2 >= self.min_range**2) & (d2 <= self.max_range**2)
