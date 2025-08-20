@@ -58,8 +58,8 @@
         </node>
 
 
-        <!-- Dynamics-Aware 3D Velocity-Obstacle Safety Filter -->
-         <node pkg="uav_autonomous_utils" type="dynamics_aware_vo_filter.py" 
+        <!-- Dynamics-Aware 3D Velocity-Obstacle Safety Filter (OPTIMIZED VERSION) -->
+        <node pkg="uav_autonomous_utils" type="dynamics_aware_vo_filter_optimized.py" 
               name="dynamics_aware_vo_filter_3d" output="screen">
             <!-- Topics -->
             <param name="input_twist_topic" value="/uav/attractive_velocity" />
