@@ -207,7 +207,7 @@ class EnhancedDroneStateMachine(Machine):
 
     def is_takeoff_altitude_reached(self, event=None):
         if self.current_pose:
-            return self.current_pose.pose.position.z >= self.takeoff_altitude
+            return self.current_pose.pose.position.z >= self.takeoff_altitude -0.3
         return False
 
     def is_near_gps_goal(self, event=None):
@@ -533,8 +533,8 @@ class EnhancedDroneStateMachine(Machine):
 
     def on_exit_takeoff(self, event=None):
         """Safety: Set hover mode when leaving takeoff"""
-        self.set_hover_mode()
-        rospy.loginfo("Exiting TAKEOFF - hover mode set")
+        # self.set_hover_mode()
+        rospy.loginfo("Exiting TAKEOFF")
 
     def on_enter_visual_servoing(self, event=None):
         rospy.loginfo("STATE: VISUAL_SERVOING - Switching to visual control")
